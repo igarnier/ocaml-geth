@@ -2,10 +2,10 @@
 module Http_client = Nethttp_client
 
 module YoUtil = struct
-  let drop_assoc = function `Assoc xs -> xs | _ -> failwith "Bad argument"
+  let drop_assoc  = function `Assoc xs -> xs | _ -> failwith "Bad argument"
   let drop_string = function `String s -> s | _ -> failwith "Bad argument"
-  let drop_int = function `Int n -> n | _ -> failwith "Bad argument"
-  let drop_list = function `List xs -> xs | _ -> failwith "Bad argument"
+  let drop_int    = function `Int n -> n | _ -> failwith "Bad argument"
+  let drop_list   = function `List xs -> xs | _ -> failwith "Bad argument"
   let unwrap_res x = x |> drop_assoc |> List.assoc "data"
 end
 
@@ -19,7 +19,7 @@ let call uri method_name params =
            ]
   in
   let data = Yojson.to_string json in
-  Printf.printf "Rpc.call: raw request=\n%s\n" data;
+  Printf.printf "Rpc.call: raw request =\n%s\n" data;
   let req = new Http_client.post_raw uri data in
   req#set_req_header "Content-type" "application/json";
   let pipeline = new Http_client.pipeline in
