@@ -138,6 +138,9 @@ let mkdir dir =
 let cd dir =
   Printf.sprintf "cd %s" dir
 
+let mv name1 name2 =
+  Printf.sprintf "mv %s %s" name1 name2
+
 let geth_init datadir genesis_json =
   Printf.sprintf "get --datadir=\"%s\" init \"%s\"" datadir genesis_json
 
@@ -146,17 +149,19 @@ let bootnode_init addr =
 
 let (//) dir1 dir2 = dir1^"/"^dir2
 
-let write_genesis genesis_block target_file session =
-  let local_genesis = Filename.temp_file "genesis" ".json" in
-  File.with_file_out ~mode:[`create;`text] ~perm:(File.unix_perm 0o660) local_genesis (fun fd ->
-      let json_str = genesis_block |> Genesis.to_json |> Yojson.to_string in
-      output_string fd json_str;
-      Ssh.Client.scp local_genesis target_file session
-    )
 
 let log_exec ~command session =
   let res = Ssh.Client.exec ~command session in
   Printf.eprintf "# %s > %s\n" command res
+
+let write_genesis genesis_block base_path mode session =
+  let local_genesis = Filename.temp_file "genesis" ".json" in
+  File.with_file_out ~mode:[`create;`text] ~perm:(File.unix_perm mode) local_genesis (fun fd ->
+      let json_str = genesis_block |> Genesis.to_json |> Yojson.to_string in
+      output_string fd json_str;
+      Ssh.Client.scp ~src_path:local_genesis ~base_path ~mode session;
+      log_exec ~command:(mv (base_path // (Filename.basename local_genesis)) (base_path // "genesis.json")) session
+    )
 
 let initialize_node ~(ssh_host : Host.t) ~username ~(conf : geth_config) =
   let opts =
@@ -169,14 +174,9 @@ let initialize_node ~(ssh_host : Host.t) ~username ~(conf : geth_config) =
     } in
   Ssh.Client.with_session (fun session ->
       let open Ssh.Client in
-      log_exec ~command:(mkdir conf.root_directory) session;
-      log_exec ~command:("pwd") session;
-      log_exec ~command:("ls") session;
-      log_exec ~command:(cd conf.root_directory) session;
-      log_exec ~command:("pwd") session;
-      log_exec ~command:(mkdir conf.data_subdir) session;
-      log_exec ~command:(mkdir conf.source_subdir) session;
-      write_genesis conf.genesis_block "genesis.json" session;
+      log_exec ~command:(mkdir (conf.root_directory // conf.data_subdir)) session;
+      log_exec ~command:(mkdir (conf.root_directory // conf.source_subdir)) session;      
+      write_genesis conf.genesis_block conf.root_directory 0o666 session;
       exec
         ~command:(geth_init
                     ("~"//conf.root_directory//conf.data_subdir)
