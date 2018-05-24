@@ -3,4 +3,4 @@
 (library
  ((name        mlparity)
   (public_name mlparity)
-  (libraries (batteries yojson netclient))))
+  (libraries (batteries yojson netclient ssh))))

@@ -1,0 +1,14 @@
+(jbuild_version 1)
+
+(executables
+ ((names (test))
+  (libraries (batteries mlparity ssh))))
+
+; (rule
+;  ((targets (mondrian.pdf))
+;   (action (with-stdout-to ${@} (run ${test:mondrian.exe})))))
+
+(alias
+ ((name runtest)
+  (deps   (test.exe))
+  (action (run ${<}))))
