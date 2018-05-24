@@ -29,13 +29,26 @@ let conf =
   let open GethInit in
   {
     genesis_block  = genesis;
-    root_directory = "preth";
+    root_directory = "priveth";
+    data_subdir    = "data";
+    source_subdir  = "source"
+  }
+
+
+let bootnode_conf =
+  let open GethInit in
+  {
+    genesis_block  = genesis;
+    root_directory = "priveth_boot";
     data_subdir    = "data";
     source_subdir  = "source"
   }
 
 
 let _ =
-  GethInit.initialize_node ~ssh_host ~username:"ilias" ~conf(* ;
+  let boot_enode = GethInit.start_bootnode ~ssh_host ~username:"ilias" ~root_directory:"priveth_boot" ~bootnode_port:30301 in
+  ()
+    (* GethInit.initialize_node ~ssh_host ~username:"ilias" ~conf *)
+(* ;
    * let enode = GethInit.start_bootnode ~ssh_host ~username:"ilias" ~bootnode_port:30301 in
    * () *)

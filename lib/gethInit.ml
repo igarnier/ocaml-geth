@@ -130,7 +130,17 @@ type geth_config = {
   source_subdir  : string
 }
 
-(* Initializing an Ethereum network: *)
+(* Initializing an Ethereum network with Geth
+
+   1. start bootnode -> get its enode address
+   2. for each machine where we want to run a node:
+      a. populate it with the genesis.json, a data dir and a source dir
+      b. run the client with the good parameters (port & etc) and
+         the enode address of the bootnode
+*)
+
+
+let (//) dir1 dir2 = dir1^"/"^dir2
 
 let mkdir dir =
   Printf.sprintf "mkdir -p %s" dir
@@ -144,10 +154,14 @@ let mv name1 name2 =
 let geth_init datadir genesis_json =
   Printf.sprintf "get --datadir=\"%s\" init \"%s\"" datadir genesis_json
 
-let bootnode_init addr =
-  Printf.sprintf "bootnode -genkey bootnode.key -addr :%d" addr
+let bootnode_genkey root_directory =
+  Printf.sprintf "bootnode --genkey=%s" (root_directory // "bootnode.key")
 
-let (//) dir1 dir2 = dir1^"/"^dir2
+let bootnode_nodekey root_directory addr =
+  Printf.sprintf "bootnode --nodekey=%s -addr :%d" (root_directory // "bootnode.key") addr
+
+let nohup command =
+  Printf.sprintf "nohup %s &" command
 
 
 let log_exec ~command session =
@@ -158,12 +172,11 @@ let write_genesis genesis_block base_path mode session =
   let local_genesis = Filename.temp_file "genesis" ".json" in
   File.with_file_out ~mode:[`create;`text] ~perm:(File.unix_perm mode) local_genesis (fun fd ->
       let json_str = genesis_block |> Genesis.to_json |> Yojson.to_string in
-      output_string fd json_str;
-      Ssh.Client.scp ~src_path:local_genesis ~base_path ~mode session;
-      log_exec ~command:(mv (base_path // (Filename.basename local_genesis)) (base_path // "genesis.json")) session
-    )
+      output_string fd json_str
+    );
+  Ssh.Client.scp ~src_path:local_genesis ~base_path ~dst_filename:"genesis.json" ~mode session
 
-let initialize_node ~(ssh_host : Host.t) ~username ~(conf : geth_config) =
+let initialize_node ~ssh_host ~username ~conf =
   let opts =
     let open Ssh.Client in
     { host  = ssh_host.Host.hostname;
@@ -177,14 +190,14 @@ let initialize_node ~(ssh_host : Host.t) ~username ~(conf : geth_config) =
       log_exec ~command:(mkdir (conf.root_directory // conf.data_subdir)) session;
       log_exec ~command:(mkdir (conf.root_directory // conf.source_subdir)) session;      
       write_genesis conf.genesis_block conf.root_directory 0o666 session;
-      exec
+      log_exec
         ~command:(geth_init
                     ("~"//conf.root_directory//conf.data_subdir)
-                    ("~"//conf.root_directory//"genesis.json")) session |> ignore
+                    ("~"//conf.root_directory//"genesis.json")) session
     ) opts
 
 (* Returns the bootnode address *)
-let start_bootnode ~(ssh_host : Host.t) ~username ~bootnode_port =
+let start_bootnode ~ssh_host ~username ~root_directory ~bootnode_port =
   let opts =
     let open Ssh.Client in
     { host  = ssh_host.Host.hostname;
@@ -195,10 +208,17 @@ let start_bootnode ~(ssh_host : Host.t) ~username ~bootnode_port =
     } in
   Ssh.Client.with_session (fun session ->
       let open Ssh.Client in
-      let result = exec ~command:(bootnode_init bootnode_port) session in
-      Printf.printf "RESULT: %s\n" result;
-      let start = Str.search_forward (Str.regexp_string "enode") result 0 in
-      Str.string_after result start
+      log_exec ~command:(mkdir root_directory) session;
+      log_exec ~command:(bootnode_genkey root_directory) session;
+      log_exec ~command:(nohup (bootnode_nodekey root_directory bootnode_port)) session;
+      ""
+      (* Printf.printf "Bootnode enode: %s\n" "";
+       * let start =
+       *   try Str.search_forward (Str.regexp_string "enode") result 0
+       *   with Not_found ->
+       *     failwith "Enode not found in output"
+       * in
+       * Str.string_after result start *)
     ) opts
 
 
@@ -207,7 +227,6 @@ let start_bootnode ~(ssh_host : Host.t) ~username ~bootnode_port =
  * cd ucsfnet
  * mkdir data
  * mkdir source *)
-
   
 (* {
  * "config": {
