@@ -44,11 +44,30 @@ let bootnode_conf =
     source_subdir  = "source"
   }
 
+let ssh_opts =
+  { Ssh.Client.host = ssh_host.hostname;
+    username = "ilias";
+    port = 22;
+    log_level = SSH_LOG_NOLOG; (* SSH_LOG_FUNCTIONS; *)
+    auth = Ssh.Client.Interactive
+  }
+
+(* let _ =
+ *   let open Ssh.Client in
+ *   with_session (fun session ->
+ *       with_shell (fun chan ->
+ *           Channel.read_timeout chan 100 |> (function s -> Printf.printf "result: %s\n%!" s);
+ *           ignore (Channel.write chan "mkdir B\n");
+ *           ignore (Channel.write chan "mkdir A\n");
+ *           ignore (Channel.write chan "echo -n ABC\n")
+ *         ) session
+ *     ) ssh_opts *)
+  
 
 let _ =
-  let boot_enode = GethInit.start_bootnode ~ssh_host ~username:"ilias" ~root_directory:"priveth_boot" ~bootnode_port:30301 in
-  ()
-    (* GethInit.initialize_node ~ssh_host ~username:"ilias" ~conf *)
-(* ;
-   * let enode = GethInit.start_bootnode ~ssh_host ~username:"ilias" ~bootnode_port:30301 in
-   * () *)
+  let boot_enode =
+    GethInit.start_bootnode ~ssh_host ~username:"ilias" ~root_directory:"priveth_boot" ~bootnode_port:30301
+  in
+  Printf.printf "bootnode enode: %s\n" boot_enode
+  (* GethInit.initialize_node ~ssh_host ~username:"ilias" ~conf; *)
+  

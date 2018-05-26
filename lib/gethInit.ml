@@ -140,33 +140,20 @@ type geth_config = {
 *)
 
 
-let (//) dir1 dir2 = dir1^"/"^dir2
-
-let mkdir dir =
-  Printf.sprintf "mkdir -p %s" dir
-
-let cd dir =
-  Printf.sprintf "cd %s" dir
-
-let mv name1 name2 =
-  Printf.sprintf "mv %s %s" name1 name2
+let (//) = Filename.concat
 
 let geth_init datadir genesis_json =
-  Printf.sprintf "get --datadir=\"%s\" init \"%s\"" datadir genesis_json
+  Shell.of_string (Printf.sprintf "geth --datadir=\"%s\" init \"%s\"" datadir genesis_json)
 
-let bootnode_genkey root_directory =
-  Printf.sprintf "bootnode --genkey=%s" (root_directory // "bootnode.key")
+let bootnode_genkey bootnode_key =
+  Shell.of_string (Printf.sprintf "bootnode --genkey=%s" bootnode_key)
 
-let bootnode_nodekey root_directory addr =
-  Printf.sprintf "bootnode --nodekey=%s -addr :%d" (root_directory // "bootnode.key") addr
+let bootnode_nodekey addr bootnode_key =
+  Shell.of_string (Printf.sprintf "bootnode --nodekey=%s -addr :%d" bootnode_key addr)
 
-let nohup command =
-  Printf.sprintf "nohup %s &" command
-
-
-let log_exec ~command session =
-  let res = Ssh.Client.exec ~command session in
-  Printf.eprintf "# %s > %s\n" command res
+let log_exec ~command channel =
+  let res = Shell.execute channel command in
+  Printf.eprintf "# %s > %s\n" (Shell.to_string command) res
 
 let write_genesis genesis_block base_path mode session =
   let local_genesis = Filename.temp_file "genesis" ".json" in
@@ -177,48 +164,58 @@ let write_genesis genesis_block base_path mode session =
   Ssh.Client.scp ~src_path:local_genesis ~base_path ~dst_filename:"genesis.json" ~mode session
 
 let initialize_node ~ssh_host ~username ~conf =
+  let open Ssh.Client in
   let opts =
-    let open Ssh.Client in
     { host  = ssh_host.Host.hostname;
       username;
       port      = ssh_host.Host.port;
       log_level = SSH_LOG_WARNING;
       auth      = Interactive
     } in
-  Ssh.Client.with_session (fun session ->
-      let open Ssh.Client in
-      log_exec ~command:(mkdir (conf.root_directory // conf.data_subdir)) session;
-      log_exec ~command:(mkdir (conf.root_directory // conf.source_subdir)) session;      
+  with_session (fun session ->
+      with_shell (fun channel ->
+          log_exec ~command:(Shell.mkdir (conf.root_directory // conf.data_subdir)) channel;
+          log_exec ~command:(Shell.mkdir (conf.root_directory // conf.source_subdir)) channel
+        ) session;
       write_genesis conf.genesis_block conf.root_directory 0o666 session;
-      log_exec
-        ~command:(geth_init
-                    ("~"//conf.root_directory//conf.data_subdir)
-                    ("~"//conf.root_directory//"genesis.json")) session
+      with_shell (fun channel ->
+          log_exec
+            ~command:(geth_init
+                        ("~"//conf.root_directory//conf.data_subdir)
+                        ("~"//conf.root_directory//"genesis.json")) channel
+        ) session
     ) opts
 
 (* Returns the bootnode address *)
 let start_bootnode ~ssh_host ~username ~root_directory ~bootnode_port =
+  let open Ssh.Client in
   let opts =
-    let open Ssh.Client in
     { host  = ssh_host.Host.hostname;
       username;
       port      = ssh_host.Host.port;
       log_level = SSH_LOG_WARNING;
       auth      = Interactive
     } in
-  Ssh.Client.with_session (fun session ->
-      let open Ssh.Client in
-      log_exec ~command:(mkdir root_directory) session;
-      log_exec ~command:(bootnode_genkey root_directory) session;
-      log_exec ~command:(nohup (bootnode_nodekey root_directory bootnode_port)) session;
-      ""
-      (* Printf.printf "Bootnode enode: %s\n" "";
-       * let start =
-       *   try Str.search_forward (Str.regexp_string "enode") result 0
-       *   with Not_found ->
-       *     failwith "Enode not found in output"
-       * in
-       * Str.string_after result start *)
+  let bootnode_key = "bootnode.key" in (* file containing private key *)
+  with_session (fun session ->
+      with_shell (fun channel ->
+          log_exec ~command:(Shell.mkdir root_directory) channel;
+          log_exec ~command:(Shell.cd root_directory) channel;
+          log_exec ~command:(bootnode_genkey bootnode_key) channel;
+          let bootnode_info =
+            Shell.execute ~read_stderr:true ~timeout:300 channel (bootnode_nodekey bootnode_port bootnode_key)
+          in
+          (* log_exec ~command:(Shell.cat "nohup.out") channel; *)
+          (* let bootnode_info =
+           *   Shell.execute channel (Shell.cat "nohup.out")
+           * in *)
+          let start =
+            try Str.search_forward (Str.regexp_string "enode") bootnode_info 0
+            with Not_found ->
+              failwith ("Enode not found in output: " ^ bootnode_info)
+          in
+          Str.string_after bootnode_info start
+        ) session
     ) opts
 
 

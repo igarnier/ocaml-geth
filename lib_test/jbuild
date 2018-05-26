@@ -2,7 +2,7 @@
 
 (executables
  ((names (test))
-  (libraries (batteries mlparity ssh))))
+  (libraries (batteries mlparity libssh))))
 
 ; (rule
 ;  ((targets (mondrian.pdf))
