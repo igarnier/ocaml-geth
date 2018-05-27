@@ -127,7 +127,7 @@ type geth_config = {
   genesis_block  : Genesis.t;
   root_directory : string;
   data_subdir    : string;
-  source_subdir  : string
+  source_subdir  : string;
 }
 
 (* Initializing an Ethereum network with Geth
@@ -140,111 +140,136 @@ type geth_config = {
 *)
 
 
-let (//) = Filename.concat
+(* -------------------------------------------------------------------------- *)
+(* Geth specific shell commands *)
 
-let geth_init datadir genesis_json =
-  Shell.of_string (Printf.sprintf "geth --datadir=\"%s\" init \"%s\"" datadir genesis_json)
+let (//) = Filename.concat
 
 let bootnode_genkey bootnode_key =
   Shell.of_string (Printf.sprintf "bootnode --genkey=%s" bootnode_key)
 
 let bootnode_nodekey addr bootnode_key =
-  Shell.of_string (Printf.sprintf "bootnode --nodekey=%s -addr :%d" bootnode_key addr)
+  let command =
+    Printf.sprintf "bootnode --nodekey=%s -addr :%d" bootnode_key addr
+  in
+  Shell.of_string command
 
-let log_exec ~command channel =
+let geth_init datadir =
+  let command =
+    Printf.sprintf "geth --datadir=\"%s\" init \"genesis.json\"" datadir
+  in
+  Shell.of_string command
+
+let geth_start ?(verbosity=6) boot_enode =
+  let command =
+    Printf.sprintf "geth --bootnodes=\"%s\" --verbosity=%d" boot_enode verbosity
+  in
+  Shell.of_string command
+
+(* -------------------------------------------------------------------------- *)
+(* Wrap Shell.execute so that we have a feedback on what has been executed and
+   what was produced on the remote stdout. *)
+
+let log_exec channel command =
   let res = Shell.execute channel command in
   Printf.eprintf "# %s > %s\n" (Shell.to_string command) res
 
-let write_genesis genesis_block base_path mode session =
+(* -------------------------------------------------------------------------- *)
+(* The genesis block specification is converted to json then to string, then
+   to a local file, then sent via scp to the remote host. *)
+
+let write_genesis genesis_block base_path mode ssh_session =
   let local_genesis = Filename.temp_file "genesis" ".json" in
-  File.with_file_out ~mode:[`create;`text] ~perm:(File.unix_perm mode) local_genesis (fun fd ->
-      let json_str = genesis_block |> Genesis.to_json |> Yojson.to_string in
-      output_string fd json_str
-    );
-  Ssh.Client.scp ~src_path:local_genesis ~base_path ~dst_filename:"genesis.json" ~mode session
+  File.with_file_out
+    ~mode:[`create;`text]
+    ~perm:(File.unix_perm mode) local_genesis (fun fd ->
+        let json_str = genesis_block |> Genesis.to_json |> Yojson.to_string in
+        output_string fd json_str
+      );
+  Ssh.Client.scp
+    ~src_path:local_genesis
+    ~base_path
+    ~dst_filename:"genesis.json"
+    ~mode
+    ssh_session
 
-let initialize_node ~ssh_host ~username ~conf =
-  let open Ssh.Client in
-  let opts =
-    { host  = ssh_host.Host.hostname;
-      username;
-      port      = ssh_host.Host.port;
-      log_level = SSH_LOG_WARNING;
-      auth      = Interactive
-    } in
-  with_session (fun session ->
-      with_shell (fun channel ->
-          log_exec ~command:(Shell.mkdir (conf.root_directory // conf.data_subdir)) channel;
-          log_exec ~command:(Shell.mkdir (conf.root_directory // conf.source_subdir)) channel
-        ) session;
-      write_genesis conf.genesis_block conf.root_directory 0o666 session;
-      with_shell (fun channel ->
-          log_exec
-            ~command:(geth_init
-                        ("~"//conf.root_directory//conf.data_subdir)
-                        ("~"//conf.root_directory//"genesis.json")) channel
-        ) session
-    ) opts
+(* -------------------------------------------------------------------------- *)
+(* Populating remote hosts with config files & starting geth nodes are taken
+   care of by the following functions. *)
 
-(* Returns the bootnode address *)
-let start_bootnode ~ssh_host ~username ~root_directory ~bootnode_port =
-  let open Ssh.Client in
-  let opts =
-    { host  = ssh_host.Host.hostname;
-      username;
-      port      = ssh_host.Host.port;
-      log_level = SSH_LOG_WARNING;
-      auth      = Interactive
-    } in
+(* Returns the process that runs on [port] on the remote host, if any.
+   This should be MacOS-ok. *)
+let port_is_free channel port =
+  let command =
+    Printf.sprintf "lsof -n -i:%d | cut -d \" \" -f1 | tail -n 1" port
+  in
+  let command = Shell.of_string command in
+  let result  = Shell.execute ~timeout:300 channel command in
+  if String.is_empty result then
+    None
+  else
+    Some result
+
+let port_is_free_on_host ~ssh_session ~port =
+  Ssh.Client.with_shell (fun channel ->
+      Shell.flush_stdout channel;
+      port_is_free channel port
+    ) ssh_session
+
+let start_node ~ssh_session ~conf ~boot_enode =
+  Ssh.Client.with_shell (fun channel ->
+      Shell.flush_stdout channel;
+      let exec = log_exec channel in
+      List.iter exec [
+        Shell.mkdir conf.root_directory;
+        Shell.cd conf.root_directory;
+        Shell.mkdir conf.data_subdir;
+        Shell.mkdir conf.source_subdir
+      ]
+    ) ssh_session;
+  write_genesis conf.genesis_block conf.root_directory 0o666 ssh_session;
+  Ssh.Client.with_shell (fun channel ->
+      Shell.flush_stdout channel;
+      let exec = log_exec channel in
+      List.iter exec [
+        Shell.cd conf.root_directory;
+        geth_init conf.data_subdir;
+        geth_start boot_enode
+      ]
+    ) ssh_session
+
+let extract_enode string =
+  let enode_start =
+    try Str.search_forward (Str.regexp_string "enode") string 0
+    with Not_found ->
+      failwith ("Enode not found in " ^ string)
+  in
+  Str.string_after string enode_start
+
+(* Starts a bootnode and returns the bootnode address.
+   Assume [bootnode_port] is free. *)
+let start_bootnode ~ssh_session ~root_directory ~bootnode_port =
   let bootnode_key = "bootnode.key" in (* file containing private key *)
-  with_session (fun session ->
-      with_shell (fun channel ->
-          log_exec ~command:(Shell.mkdir root_directory) channel;
-          log_exec ~command:(Shell.cd root_directory) channel;
-          log_exec ~command:(bootnode_genkey bootnode_key) channel;
-          let bootnode_info =
-            Shell.execute ~read_stderr:true ~timeout:300 channel (bootnode_nodekey bootnode_port bootnode_key)
-          in
-          (* log_exec ~command:(Shell.cat "nohup.out") channel; *)
-          (* let bootnode_info =
-           *   Shell.execute channel (Shell.cat "nohup.out")
-           * in *)
-          let start =
-            try Str.search_forward (Str.regexp_string "enode") bootnode_info 0
-            with Not_found ->
-              failwith ("Enode not found in output: " ^ bootnode_info)
-          in
-          Str.string_after bootnode_info start
-        ) session
-    ) opts
+  Ssh.Client.with_shell (fun channel ->
+      Shell.flush_stdout channel;
+      let exec = log_exec channel in
+      List.iter exec [
+        Shell.mkdir root_directory;
+        Shell.cd root_directory;
+        bootnode_genkey bootnode_key
+      ];
+      let bootnode_info =
+        Shell.execute
+          ~read_stderr:true
+          ~timeout:300
+          channel
+          (bootnode_nodekey bootnode_port bootnode_key)
+      in
+      extract_enode bootnode_info
+    ) ssh_session
 
-
-(* ssh root@101.102.103.104
- * mkdir ucsfnet
- * cd ucsfnet
- * mkdir data
- * mkdir source *)
-  
-(* {
- * "config": {
- *         "chainId": 15,
- *         "homesteadBlock": 0,
- *         "eip155Block": 0,
- *         "eip158Block": 0
- *     },
- * 
- *   "alloc"      : {
- *   "0x0000000000000000000000000000000000000001": {"balance": "111111111"},
- *   "0x0000000000000000000000000000000000000002": {"balance": "222222222"}
- *     },
- * 
- *   "coinbase"   : "0x0000000000000000000000000000000000000000",
- *   "difficulty" : "0x00001",
- *   "extraData"  : "",
- *   "gasLimit"   : "0x2fefd8",
- *   "nonce"      : "0x0000000000000107",
- *   "mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
- *   "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
- *   "timestamp"  : "0x00"
- * } *)
-
+let killall ~ssh_session ~process =
+  Ssh.Client.with_shell (fun channel ->
+      Shell.flush_stdout channel;
+      log_exec channel (Shell.of_string ("killall "^process))
+    ) ssh_session

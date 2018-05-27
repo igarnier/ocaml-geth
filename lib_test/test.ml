@@ -22,7 +22,7 @@ let genesis =
   })
 
 let ssh_host =
-  { Host.hostname = "localhost";
+  { Host.hostname = "127.0.0.1";
     Host.port     = 22 }
 
 let conf =
@@ -30,16 +30,6 @@ let conf =
   {
     genesis_block  = genesis;
     root_directory = "priveth";
-    data_subdir    = "data";
-    source_subdir  = "source"
-  }
-
-
-let bootnode_conf =
-  let open GethInit in
-  {
-    genesis_block  = genesis;
-    root_directory = "priveth_boot";
     data_subdir    = "data";
     source_subdir  = "source"
   }
@@ -52,22 +42,36 @@ let ssh_opts =
     auth = Ssh.Client.Interactive
   }
 
-(* let _ =
- *   let open Ssh.Client in
- *   with_session (fun session ->
- *       with_shell (fun chan ->
- *           Channel.read_timeout chan 100 |> (function s -> Printf.printf "result: %s\n%!" s);
- *           ignore (Channel.write chan "mkdir B\n");
- *           ignore (Channel.write chan "mkdir A\n");
- *           ignore (Channel.write chan "echo -n ABC\n")
- *         ) session
- *     ) ssh_opts *)
-  
-
 let _ =
-  let boot_enode =
-    GethInit.start_bootnode ~ssh_host ~username:"ilias" ~root_directory:"priveth_boot" ~bootnode_port:30301
+  (* Init ssh session structure *)
+  let is_port_free =
+    Ssh.Common.with_session (fun ssh_session ->
+        Ssh.Client.connect_and_auth ssh_opts ssh_session;
+        GethInit.port_is_free_on_host ~ssh_session ~port:30301
+      )
   in
-  Printf.printf "bootnode enode: %s\n" boot_enode
-  (* GethInit.initialize_node ~ssh_host ~username:"ilias" ~conf; *)
+  begin match is_port_free with
+  | None -> ()
+  | Some process ->
+    (Printf.printf "port 30301 is already taken by proc. %s - retype password to engage killall\n%!" process;
+     Ssh.Common.with_session (fun ssh_session ->
+         Ssh.Client.connect_and_auth ssh_opts ssh_session;
+         GethInit.killall ~ssh_session ~process
+       )
+    )
+  end;
+  Printf.eprintf "port 30301 is free on host - starting bootnode\n%!";
+  let boot_enode =
+    Ssh.Common.with_session (fun ssh_session ->
+        Ssh.Client.connect_and_auth ssh_opts ssh_session;
+        GethInit.start_bootnode ~ssh_session ~root_directory:"priveth_boot" ~bootnode_port:30301
+      )
+  in
+  Printf.eprintf "bootnode enode: %s\n%!" boot_enode;
+  (* connect to regular node (here it's still localhost ...) *)
+  Ssh.Common.with_session (fun ssh_session ->
+      Ssh.Client.connect_and_auth ssh_opts ssh_session;
+      GethInit.start_node ~ssh_session ~conf ~boot_enode
+    )
+  
   

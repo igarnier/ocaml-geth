@@ -12,4 +12,6 @@ val nohup : command -> command
 val background : command -> command
 val cat : string -> command
 
+val flush_stdout : Ssh.Common.ssh_channel -> unit
+
 val execute : ?read_stderr:bool -> ?timeout:int -> Ssh.Common.ssh_channel -> command -> string

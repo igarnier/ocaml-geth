@@ -29,6 +29,9 @@ let background command =
 let cat filename =
   "cat "^filename
 
+let flush_stdout channel =
+  ignore (Client.Channel.read_timeout channel false 100)
+
 let execute ?(read_stderr=false) ?(timeout=100) channel command =
   let open Client.Channel in
   match write channel (command^"\n") with
