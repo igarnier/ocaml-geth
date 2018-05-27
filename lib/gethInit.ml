@@ -223,6 +223,7 @@ let start_node ~ssh_session ~conf ~boot_enode =
       List.iter exec [
         Shell.mkdir conf.root_directory;
         Shell.cd conf.root_directory;
+        Shell.of_string "pwd";
         Shell.mkdir conf.data_subdir;
         Shell.mkdir conf.source_subdir
       ]
@@ -244,7 +245,9 @@ let extract_enode string =
     with Not_found ->
       failwith ("Enode not found in " ^ string)
   in
-  Str.string_after string enode_start
+  let enode_addr = Str.string_after string enode_start in
+  (* Remove trailing "\n" *)
+  String.strip enode_addr
 
 (* Starts a bootnode and returns the bootnode address.
    Assume [bootnode_port] is free. *)
