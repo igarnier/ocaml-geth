@@ -21,57 +21,30 @@ let genesis =
       timestamp   = 0;
   })
 
-let ssh_host =
-  { Host.hostname = "127.0.0.1";
-    Host.port     = 22 }
-
 let conf =
   let open GethInit in
   {
     genesis_block  = genesis;
+    network_id     = 8798798;
     root_directory = "priveth";
     data_subdir    = "data";
     source_subdir  = "source"
   }
 
-let ssh_opts =
-  { Ssh.Client.host = ssh_host.hostname;
-    username = "ilias";
-    port = 22;
-    log_level = SSH_LOG_NOLOG; (* SSH_LOG_FUNCTIONS; *)
-    auth = Ssh.Client.Interactive
+let password =
+  Printf.printf "password: %!";
+  Ssh_client.Easy.read_secret ()
+
+let ilias_on_xps13 =
+  { GethInit.ip_address = "127.0.0.1";
+    ssh_port = 22;
+    login = "ilias";
+    password
   }
 
+
 let _ =
-  (* Init ssh session structure *)
-  let is_port_free =
-    Ssh.Common.with_session (fun ssh_session ->
-        Ssh.Client.connect_and_auth ssh_opts ssh_session;
-        GethInit.port_is_free_on_host ~ssh_session ~port:30301
-      )
-  in
-  begin match is_port_free with
-  | None -> ()
-  | Some process ->
-    (Printf.printf "port 30301 is already taken by proc. %s - retype password to engage killall\n%!" process;
-     Ssh.Common.with_session (fun ssh_session ->
-         Ssh.Client.connect_and_auth ssh_opts ssh_session;
-         GethInit.killall ~ssh_session ~process
-       )
-    )
-  end;
-  Printf.eprintf "port 30301 is free on host - starting bootnode\n%!";
-  let boot_enode =
-    Ssh.Common.with_session (fun ssh_session ->
-        Ssh.Client.connect_and_auth ssh_opts ssh_session;
-        GethInit.start_bootnode ~ssh_session ~root_directory:"priveth_boot" ~bootnode_port:30301
-      )
-  in
-  Printf.eprintf "bootnode enode: %s\n%!" boot_enode;
-  (* connect to regular node (here it's still localhost ...) *)
-  Ssh.Common.with_session (fun ssh_session ->
-      Ssh.Client.connect_and_auth ssh_opts ssh_session;
-      GethInit.start_node ~ssh_session ~conf ~boot_enode
-    )
+  let enode = GethInit.start_no_bootnode conf ilias_on_xps13 in
+  Printf.printf "enode: %s\n" enode
   
   

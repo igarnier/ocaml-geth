@@ -1,4 +1,3 @@
-
 type command
 
 val of_string : string -> command
@@ -12,6 +11,6 @@ val nohup : command -> command
 val background : command -> command
 val cat : string -> command
 
-val flush_stdout : Ssh.Common.ssh_channel -> unit
+val flush_stdout : Ssh_client.Types.ssh_channel -> unit
 
-val execute : ?read_stderr:bool -> ?timeout:int -> Ssh.Common.ssh_channel -> command -> string
+val execute : ?read_stderr:bool -> ?read_timeout:int -> Ssh_client.Easy.shell_handle -> command -> string
