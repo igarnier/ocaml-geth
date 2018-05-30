@@ -170,10 +170,11 @@ struct
     | Nodiscover
     | Exec of string (* javascript statement *)
     | IpcPath of string (* foo/bar/baz.ipc *)
+    | Rpc of { rpcport : int; rpcaddr : string; rpcapis : string }
 
   type command =
     | Init of string (* json file *)
-    | Attach
+    | Attach of string option
 
   let string_of_option = function
     | Datadir s    -> sprintf "--datadir \"%s\"" s
@@ -191,6 +192,8 @@ struct
       sprintf "--exec \"%s\"" s
     | IpcPath s ->
       sprintf "--ipcpath \"%s\"" s
+    | Rpc { rpcport; rpcaddr; rpcapis } ->
+      sprintf "--rpc --rpcaddr %s --rpcport %d --rpcapi %s" rpcaddr rpcport rpcapis
         
   let make (options : geth_option list) (command : command option) =
     let option_str =
@@ -201,8 +204,11 @@ struct
       | None -> ""
       | Some (Init json_file)->
         sprintf "init \"%s\"" json_file
-      | Some Attach ->
-        "attach"
+      | Some (Attach ipc_addr) ->
+        (match ipc_addr with
+         | None          -> "attach"
+         | Some ipc_addr -> sprintf "attach %s" ipc_addr
+        )
     in
     Shell.of_string (sprintf "geth %s %s" option_str command_str)
 
@@ -222,12 +228,12 @@ exception Deploy_error of deploy_target
 
 (* Helper functions *)
 
-let log_exec shell command =
-  let res = Shell.execute shell command in
+let log_exec ?read_stderr shell command =
+  let res = Shell.execute ?read_stderr shell command in
   Printf.eprintf "# %s > %s\n" (Shell.to_string command) res
 
-let log_exec_return shell command =
-  let res = Shell.execute shell command in
+let log_exec_return ?read_stderr shell command =
+  let res = Shell.execute ?read_stderr shell command in
   Printf.eprintf "# %s > %s\n" (Shell.to_string command) res;
   res
 
@@ -315,31 +321,47 @@ let start_no_bootnode geth_cfg target =
     List.iter exec [
       Shell.mkdir geth_cfg.root_directory;
       Shell.cd geth_cfg.root_directory;
-      Shell.of_string "pwd";
       Shell.mkdir geth_cfg.data_subdir;
-      Shell.mkdir geth_cfg.source_subdir
+      Shell.mkdir geth_cfg.source_subdir;
+      Shell.touch "geth.ipc"
     ]
   in
-  let init =
+  let init =    
     Geth.(make [Datadir geth_cfg.data_subdir] (Some (Init "genesis.json")))
   in
+  (* ipc_file is used to attach the console *)
+  let ipc_file = "geth.ipc" in
   let boot =
-    Geth.(make [Datadir geth_cfg.data_subdir;
-                Nodiscover;
-                NetworkId geth_cfg.network_id;
-                Verbosity 6] None)
+    let cmd =
+      Geth.(make [Datadir geth_cfg.data_subdir;
+                  Nodiscover;
+                  NetworkId geth_cfg.network_id;
+                  Verbosity 6;
+                  IpcPath ipc_file;
+                  Rpc { rpcport = 8545; rpcaddr = "localhost"; rpcapis = "admin,web3,eth" }
+                 ] None)
+    in
+    Shell.(screen cmd)
   in
   let get_enode =
-    Geth.(make [Exec "admin.nodeInfo.enode"] (Some Attach))
+    let rpc_addr = "http://localhost:8545" in
+    Geth.(make [Exec "admin.nodeInfo.enode"] (Some (Attach (Some rpc_addr))))
   in
   login_target target (fun session ->
       Easy.with_shell_channel ~session (fun shell greet_string ->
           create_directories shell;
           write_genesis geth_cfg.genesis_block geth_cfg.root_directory 0o640 session;
           log_exec shell init;
-          log_exec shell boot;
-          log_exec shell (Shell.of_string "ls");
-          log_exec_return shell get_enode
+          log_exec ~read_stderr:true shell boot;
+
+          (* log_exec_return shell get_enode *)
+          (* let res =
+           *   log_exec_return shell (Shell.of_string "pwd") |> (fun pwd ->
+           *       
+           *     )
+           * in
+           * res *)
+          Shell.execute ~read_timeout:500 shell (Shell.of_string "geth --exec \"admin.nodeInfo.enode\" attach http://localhost:8545")
         )
     )
 

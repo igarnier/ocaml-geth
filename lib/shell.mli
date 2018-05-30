@@ -6,10 +6,12 @@ val to_string : command -> string
 val mkdir : string -> command
 val cd    : string -> command
 val mv    : string -> string -> command
+val touch : string -> command
 val seq   : command -> command -> command
 val nohup : command -> command
 val background : command -> command
-val cat : string -> command
+val cat    : string -> command
+val screen : command -> command
 
 val flush_stdout : Ssh_client.Types.ssh_channel -> unit
 
