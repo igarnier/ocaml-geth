@@ -6,6 +6,7 @@ val to_string : command -> string
 val mkdir : string -> command
 val cd    : string -> command
 val mv    : string -> string -> command
+val rm_fr : string -> command  
 val touch : string -> command
 val seq   : command -> command -> command
 val nohup : command -> command

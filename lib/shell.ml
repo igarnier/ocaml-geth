@@ -20,6 +20,9 @@ let touch file =
 let mv name1 name2 =
   Printf.sprintf "mv %s %s" name1 name2
 
+let rm_fr dir =
+  Printf.sprintf "rm -fr %s" dir
+
 let seq command1 command2 =
   command1 ^ ";" ^ command2
 

@@ -228,12 +228,12 @@ exception Deploy_error of deploy_target
 
 (* Helper functions *)
 
-let log_exec ?read_stderr shell command =
-  let res = Shell.execute ?read_stderr shell command in
+let log_exec ?read_stderr ?read_timeout shell command =
+  let res = Shell.execute ?read_stderr ?read_timeout shell command in
   Printf.eprintf "# %s > %s\n" (Shell.to_string command) res
 
-let log_exec_return ?read_stderr shell command =
-  let res = Shell.execute ?read_stderr shell command in
+let log_exec_return ?read_stderr ?read_timeout shell command =
+  let res = Shell.execute ?read_stderr ?read_timeout shell command in
   Printf.eprintf "# %s > %s\n" (Shell.to_string command) res;
   res
 
@@ -315,7 +315,43 @@ let login_target target f =
     } in
   Easy.with_password ~options ~password:target.password f
 
-let start_no_bootnode geth_cfg target =
+
+let parse_enode raw_enode =
+  let enode_start =
+    try Str.search_forward (Str.regexp_string "enode") raw_enode 0
+    with Not_found ->
+      failwith ("Enode not found in " ^ raw_enode)
+  in
+  let enode_addr = Str.string_after raw_enode enode_start in
+  let enode_end =
+    try Str.search_forward (Str.regexp_string "?discport=0") enode_addr 0
+    with Not_found -> String.length enode_addr
+  in
+  let enode_addr = Str.string_before enode_addr enode_end in
+  (* Remove trailing "\n" if any *)
+  String.strip enode_addr
+
+(* Returns the process that runs on [port] on the remote host, if any.
+   This should be MacOS-ok. *)
+let port_is_free shell port =
+  let command =
+    Printf.sprintf "lsof -n -i:%d | cut -d \" \" -f1 | tail -n 1" port
+  in
+  let command = Shell.of_string command in
+  let result  = Shell.execute ~read_timeout:300 shell command in
+  if String.is_empty result then
+    None
+  else
+    Some result
+
+let port_is_free_on_host port target =
+  login_target target (fun session ->
+      Easy.with_shell_channel ~session (fun shell greet_string ->
+          port_is_free shell port
+        )
+    )
+
+let start_no_discover geth_cfg target =
   let create_directories shell =
     let exec = log_exec shell in
     List.iter exec [
@@ -329,9 +365,9 @@ let start_no_bootnode geth_cfg target =
   let init =    
     Geth.(make [Datadir geth_cfg.data_subdir] (Some (Init "genesis.json")))
   in
-  (* ipc_file is used to attach the console *)
-  let ipc_file = "geth.ipc" in
   let boot =
+    (* ipc_file is used to attach the console *)
+    let ipc_file = "geth.ipc" in
     let cmd =
       Geth.(make [Datadir geth_cfg.data_subdir;
                   Nodiscover;
@@ -347,39 +383,54 @@ let start_no_bootnode geth_cfg target =
     let rpc_addr = "http://localhost:8545" in
     Geth.(make [Exec "admin.nodeInfo.enode"] (Some (Attach (Some rpc_addr))))
   in
+  let enode =
+    login_target target (fun session ->
+        Easy.with_shell_channel ~session (fun shell greet_string ->
+            create_directories shell;
+            write_genesis geth_cfg.genesis_block geth_cfg.root_directory 0o640 session;
+            log_exec shell init;
+            log_exec ~read_stderr:true shell boot;
+            log_exec_return ~read_timeout:500  shell get_enode
+          )
+      )
+  in
+  (* remove initial and trailing noise *)
+  let enode = parse_enode enode in
+  (* substitute ip address back in enode *)
+  Str.replace_first (Str.regexp_string "[::]") target.ip_address enode
+
+let add_peers target peers =
+  let add_peer enode =
+    let rpc_addr = "http://localhost:8545" in
+    let js_cmd   = Printf.sprintf "admin.addPeer(%s)" enode in
+    Geth.(make [Exec js_cmd] (Some (Attach (Some rpc_addr))))
+  in
   login_target target (fun session ->
       Easy.with_shell_channel ~session (fun shell greet_string ->
-          create_directories shell;
-          write_genesis geth_cfg.genesis_block geth_cfg.root_directory 0o640 session;
-          log_exec shell init;
-          log_exec ~read_stderr:true shell boot;
-
-          (* log_exec_return shell get_enode *)
-          (* let res =
-           *   log_exec_return shell (Shell.of_string "pwd") |> (fun pwd ->
-           *       
-           *     )
-           * in
-           * res *)
-          Shell.execute ~read_timeout:500 shell (Shell.of_string "geth --exec \"admin.nodeInfo.enode\" attach http://localhost:8545")
+          List.iter ((log_exec shell) % add_peer) peers
         )
     )
 
-let add_peers _ _ = ()
+let revert_deploy geth_config target =
+  login_target target (fun session ->
+      Easy.with_shell_channel ~session (fun shell greet_string ->
+          (* I should rather get the PIDs of the running processes, this is just ugly... *)              
+          log_exec shell (Shell.of_string "killall geth");
+          log_exec shell (Shell.rm_fr geth_config.root_directory);
+        )
+    )
 
-let revert_configure _ _ = ()
-
-let revert_add_peers _ _ = ()
+(* let revert_add_peers _ _ = () *)
 
 let deploy geth_config network =
   let enodes =
     try
-      List.map (start_no_bootnode geth_config) network
+      List.map (start_no_discover geth_config) network
     with
     | Deploy_error target ->
       begin
         Printf.eprintf "Configuration failed for host %s - aborting\n%!" target.ip_address;
-        List.iter (revert_configure geth_config) network;
+        List.iter (revert_deploy geth_config) network;
         exit 1
       end
     | _ ->
@@ -397,14 +448,14 @@ let deploy geth_config network =
           map
           |> List.filter (fun (target', _) -> (target' <> target))
         in
-        add_peers target all_peers_except_target
+        add_peers target (List.map snd all_peers_except_target)
       ) map
   with
   | Deploy_error target ->
     begin
       Printf.eprintf "Adding peers failed for host %s - aborting\n%!" target.ip_address;      
-      List.iter (revert_add_peers geth_config) network;
-      List.iter (revert_configure geth_config) network;
+      (* List.iter (revert_add_peers geth_config) network; *)
+      List.iter (revert_deploy geth_config) network;
       exit 1
     end
     
@@ -436,24 +487,6 @@ let deploy geth_config network =
 (* Populating remote hosts with config files & starting geth nodes are taken
    care of by the following functions. *)
 
-(* Returns the process that runs on [port] on the remote host, if any.
-   This should be MacOS-ok. *)
-(* let port_is_free channel port =
- *   let command =
- *     Printf.sprintf "lsof -n -i:%d | cut -d \" \" -f1 | tail -n 1" port
- *   in
- *   let command = Shell.of_string command in
- *   let result  = Shell.execute ~timeout:300 channel command in
- *   if String.is_empty result then
- *     None
- *   else
- *     Some result *)
-
-(* let port_is_free_on_host ~ssh_session ~port =
- *   Ssh.Client.with_shell (fun channel ->
- *       Shell.flush_stdout channel;
- *       port_is_free channel port
- *     ) ssh_session *)
 
 
 (* let extract_enode string =

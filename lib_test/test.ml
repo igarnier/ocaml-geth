@@ -44,7 +44,7 @@ let ilias_on_xps13 =
 
 
 let _ =
-  let enode = GethInit.start_no_bootnode conf ilias_on_xps13 in
+  let enode = GethInit.start_no_discover conf ilias_on_xps13 in
   Printf.printf "enode: %s\n" enode
   
   
