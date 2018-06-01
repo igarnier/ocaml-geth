@@ -1,4 +1,3 @@
-
 module Http_client = Nethttp_client
 
 module YoUtil = struct
@@ -15,7 +14,7 @@ let call uri method_name params =
     `Assoc [ ("jsonrpc", `String "2.0");
              ("method", `String method_name);
              ("params", params);
-             ("id", `Int 0); (* Sometimes this is equal to 1 ... why *)
+             ("id", `Int 0); (* TODO: this sould be a UID *)
            ]
   in
   let data = Yojson.to_string json in

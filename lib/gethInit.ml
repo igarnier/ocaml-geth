@@ -237,30 +237,6 @@ let log_exec_return ?read_stderr ?read_timeout shell command =
   Printf.eprintf "# %s > %s\n" (Shell.to_string command) res;
   res
 
-
-(* let start_node ~target ~geth_conf ~boot_enode =
- *   Easy.with_shell_channel ~session (fun shell greet_string ->
- *       let exec = log_exec shell in
- *       List.iter exec [
- *         Shell.mkdir geth_conf.root_directory;
- *         Shell.cd geth_conf.root_directory;
- *         Shell.of_string "pwd";
- *         Shell.mkdir geth_conf.data_subdir;
- *         Shell.mkdir geth_conf.source_subdir
- *       ]
- *     ) ssh_session;
- *   write_genesis conf.genesis_block conf.root_directory 0o666 ssh_session;
- *   Easy.with_shell_channel (fun channel ->
- *       Shell.flush_stdout channel;
- *       let exec = log_exec channel in
- *       List.iter exec [
- *         Shell.cd conf.root_directory;
- *         geth_init conf.data_subdir;
- *         Shell.of_string "pwd";
- *         geth_start boot_enode
- *       ]
- *     ) ssh_session *)
-
 (* -------------------------------------------------------------------------- *)
 (* Functions pertaining to configuration of the hosts *)
 (* -------------------------------------------------------------------------- *)
@@ -281,29 +257,6 @@ let write_genesis genesis_block root_dir mode session =
     ~src_path:local_genesis
     ~dst_path:(root_dir // "genesis.json")
     ~mode
-
-(* let start_node ~session ~conf ~boot_enode =
- *   Easy.with_shell_channel ~session (fun channel greet_string  ->
- *       let exec = log_exec channel in
- *       List.iter exec [
- *         Shell.mkdir conf.root_directory;
- *         Shell.cd conf.root_directory;
- *         Shell.of_string "pwd";
- *         Shell.mkdir conf.data_subdir;
- *         Shell.mkdir conf.source_subdir
- *       ]
- *     );
- *   write_genesis conf.genesis_block conf.root_directory 0o666 session;
- *   Easy.with_shell (fun channel ->
- *       Shell.flush_stdout channel;
- *       let exec = log_exec channel in
- *       List.iter exec [
- *         Shell.cd conf.root_directory;
- *         geth_init conf.data_subdir;
- *         Shell.of_string "pwd";
- *         geth_start boot_enode
- *       ]
- *     ) ssh_session *)
 
 let login_target target f =
   let options =
@@ -355,6 +308,7 @@ let start_no_discover geth_cfg target =
   let create_directories shell =
     let exec = log_exec shell in
     List.iter exec [
+      Shell.of_string "echo $0";
       Shell.mkdir geth_cfg.root_directory;
       Shell.cd geth_cfg.root_directory;
       Shell.mkdir geth_cfg.data_subdir;
@@ -433,8 +387,9 @@ let deploy geth_config network =
         List.iter (revert_deploy geth_config) network;
         exit 1
       end
-    | _ ->
-      failwith "Unexpected exception caught during network configuration - aborting\n%!"
+    | exn ->
+      (Printf.eprintf "Unexpected exception caught during network configuration - aborting\n%!";
+       raise exn)
   in
   Printf.printf "All nodes successfuly configured. Inode map:\n%!";
   let map = List.combine network enodes in
