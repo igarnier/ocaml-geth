@@ -93,6 +93,8 @@ struct
     timestamp : int
   }
 
+  let hex_of_int i =
+    Printf.sprintf "0x%x" i
 
   let to_json block =
     let config = ("config", `Assoc [
@@ -112,13 +114,13 @@ struct
       config;
       alloc;
       ("coinbase", `String block.coinbase);
-      ("difficulty", `String (Utils.hex_of_int block.difficulty));
+      ("difficulty", `String (hex_of_int block.difficulty));
       ("extraData", `String block.extra_data);
-      ("gasLimit", `String (Utils.hex_of_int block.gas_limit));
-      ("nonce", `String (Utils.hex_of_int block.nonce));
+      ("gasLimit", `String (hex_of_int block.gas_limit));
+      ("nonce", `String (hex_of_int block.nonce));
       ("mixhash", `String block.mix_hash);
       ("parentHash", `String block.parent_hash);
-      ("timestamp", `String (Utils.hex_of_int block.timestamp))
+      ("timestamp", `String (hex_of_int block.timestamp))
     ]
 
 end

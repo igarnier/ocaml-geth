@@ -1,9 +1,10 @@
-
+open Batteries
+    
 type t = block list
 
 and block =
   {
-    name   : string;
+    name   : string option;
     instrs : instr list
   }
 
@@ -15,9 +16,10 @@ and instr =
   | Exp
   | Eq
   | Push of { width : int }
-  | Dup  of { width : int }
+  | Dup  of { level : int }
   | Pop
   | Jumpi of { block : string }
+  | Jump of { block : string }
   | Lit of Evm.literal
 
 module M = Map.Make(String)
@@ -47,7 +49,12 @@ let rec to_bytecode_aux blocks state =
     (state, blockp @ tailp)
 
 and block_to_bytecode { name; instrs } (state : state) =
-  let state = add_jump name state.pc state in
+  let state =
+    match name with
+    | None -> state
+    | Some name ->
+      add_jump name state.pc state
+  in
   let state = incr_pc state in
   let state, instrs = instrs_to_bytecode instrs state in
   (state, (instr Evm.JUMPDEST) :: instrs)
@@ -61,16 +68,18 @@ and instrs_to_bytecode instrs state =
       match i with
       | Jumpi { block } ->
         [UnboundLabelPush block; instr JUMPI], 3 (* UnboundLabelPush will be expanded as 2 instrs *)
+      | Jump { block } ->
+        [UnboundLabelPush block; instr JUMP], 3 (* UnboundLabelPush will be expanded as 2 instrs *)
       | Push { width } ->
         if not (1 <= width && width <= 32) then
           failwith "Asm.instrs_to_bytecode: wrong push width"
         else
           [instr (Ops.push width)], 1
-      | Dup { width } ->
-        if not (1 <= width && width <= 16) then
+      | Dup { level } ->
+        if not (1 <= level && level <= 16) then
           failwith "Asm.instrs_to_bytecode: wrong dup width"
         else
-          [instr (Ops.dup width)], 1
+          [instr (Ops.dup level)], 1
       | Lit literal -> [lit literal], (Evm.literal_width literal)
       | Add -> [instr ADD], 1
       | Sub -> [instr SUB], 1
@@ -106,3 +115,39 @@ let resolve_names (instrs : bc list) state =
 let to_bytecode blocks =
   let state, instrs = to_bytecode_aux blocks { pc = 0; table = M.empty } in
   resolve_names instrs state
+
+let fresh =
+  let counter = ref 0 in
+  fun () ->
+    let x = !counter in
+    incr counter;
+    "fresh"^(string_of_int x)
+
+let switch (cases : (Evm.literal * block) list) =
+  let jump_table =
+    List.fold_right (fun (case, block) table ->
+        let width = Evm.literal_width case in
+        Dup { level = 1 } ::
+        Push { width } ::
+        Lit case ::
+        Eq ::
+        Jumpi { block = Option.get block.name } ::
+        table
+      ) cases []
+  in
+  let jump_table_block =
+    { name = None; instrs = jump_table }
+  in
+  let end_name = fresh () in
+  let end_block =
+    { name = Some end_name; instrs = [] }
+  in
+  let cases_code =
+    List.map (fun (_, block) ->
+        { block with
+          instrs =
+            block.instrs @ [Jump { block = end_name }]
+        }
+      ) cases
+  in
+  (jump_table_block :: cases_code) @ [ end_block ]
