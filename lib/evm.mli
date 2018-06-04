@@ -173,5 +173,5 @@ val length : bytecode -> int
 
 val dump : bytecode -> string
 
-(* val deploy : bytecode -> bytecode *)
+val deploy : bytecode -> bytecode
 

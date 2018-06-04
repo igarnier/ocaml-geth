@@ -98,7 +98,6 @@ let resolve_names (instrs : bc list) state =
         in
         let jump_pos_lit = Evm.literal_of_int jump_pos in
         let jump_pos_width = Evm.literal_width jump_pos_lit in
-        Printf.printf "lit : .%s., width: %d\n%!" (Obj.magic jump_pos_lit) jump_pos_width;
         (Evm.Instr (Evm.Ops.push jump_pos_width)) :: (Evm.Literal jump_pos_lit) :: acc
       | Code c ->
         c :: acc

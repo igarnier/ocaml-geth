@@ -76,27 +76,52 @@ struct
 
   let example =
     let open Evm in
-  [
-    Instr PUSH1;
-    Literal (Evm.literal_of_int 0);
-    Instr CALLDATALOAD;
-    Instr SLOAD;
-    Instr NOT;
-    Instr PUSH1;
-    Literal (Evm.literal_of_int 09);
-    Instr JUMPI;
-    Instr STOP;
-    Instr JUMPDEST;
-    Instr PUSH1;
-    Literal (Evm.literal_of_int 20);
-    Instr CALLDATALOAD;
-    Instr PUSH1;
-    Literal (Evm.literal_of_int 00);
-    Instr CALLDATALOAD;
-    Instr SSTORE
-  ]
+    [
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr ADD;
 
-  let _ = Printf.printf "%s\n%!" (Evm.dump example)
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr ADD;
+
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr ADD;
+
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr ADD;
+
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr ADD;
+
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr ADD;
+
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr PUSH1;
+      Literal (Evm.literal_of_int 5);
+      Instr ADD;
+
+    ]
+  
+  let _ = Printf.printf "%s\n%!" Evm.(dump (deploy example))
     
 end
 

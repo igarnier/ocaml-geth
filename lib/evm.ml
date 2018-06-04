@@ -398,12 +398,74 @@ let length program =
     match program with
     | [] -> acc
     | (Instr _) :: tail   -> length tail (acc + 1)
-    | (Literal l) :: tail -> length tail (acc + (String.length l))
+    | (Literal l) :: tail -> length tail (acc + (String.length l) / 2)
   in
   length program 0
 
 let dump (program : bytecode) =
   String.concat "" (List.map string_of_bytecode program)
+
+let bits_required positive_integer =
+  let rec loop i acc =
+    if i > 0 then
+      loop (i lsr 1) (acc + 1)
+    else
+      acc
+  in
+  loop positive_integer 0
+
+let bytes_required x =
+  let bits = bits_required x in
+  (bits / 8) + (if bits mod 8 > 0 then 1 else 0)
+
+(* computes the lfp of an equation of the type X = Y + |X|
+   where |X| is the number of bytes required to store X. Here
+   |X| is constrained to be strictly positive and <= 32. *)
+let solve_length_eq y =
+  let rec loop x =
+    let rhs = y + bytes_required x in
+    if x < rhs then
+      loop (x + 1)
+    else if x = rhs then
+      x
+    else
+      failwith "solve_length_eq: constant too large"
+  in
+  loop 1
+
+let deploy (program : bytecode) =
+  let length      = length program in
+  let lengthlit   = literal_of_int length in
+  let lengthlitw  = literal_width lengthlit in
+    (* X = push lengthlit (1 + |lengthlit| bytes)
+         + dup1 (1 byte)
+         + push where conract starts (quantity we're computing now) (1 + |X| bytes)
+         + push where to store contract (0) (2 bytes)
+         + codecopy (1 byte)
+         + push address (0) (2 bytes)
+         + return (1 byte)
+       X = 9 + |lengthlit| + |X|
+       |X| = |9 + |lengthlit| + |X||
+    *)
+  let prog_pos    = literal_of_int (solve_length_eq (9 + lengthlitw)) in
+  let prog_posw   = literal_width prog_pos in
+  let deploy_code =
+    [
+      Instr (Ops.push lengthlitw);
+      Literal lengthlit;
+      Instr DUP1;
+      Instr (Ops.push prog_posw);
+      Literal prog_pos;
+      Instr (Ops.push 1);
+      Literal (literal_of_int 0);
+      Instr CODECOPY;
+      Instr (Ops.push 1);
+      Literal (literal_of_int 0);
+      Instr RETURN;
+    ]
+  in
+  deploy_code @ program
+
 
 (* let deploy (program : bytecode) =
  *   let prog_len = length program in
