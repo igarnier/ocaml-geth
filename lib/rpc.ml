@@ -1,3 +1,5 @@
+open Batteries
+    
 module Http_client = Nethttp_client
 
 module Utils =
@@ -40,7 +42,111 @@ let call uri method_name params =
   pipeline#run ();
   let (ans: string) = req#get_resp_body () in
   print_endline ans;
-  ans
+  Yojson.Basic.from_string ans
+
+module Net =
+struct
+
+  let version ~uri =
+    call uri "net_version" `Null
+      
+  let listening ~uri =
+    call uri "net_listening" `Null
+
+  let peer_count ~uri =
+    call uri "net_peerCount" `Null    
+  
+end
+
+module Eth =
+struct
+
+  let protocol_version ~uri =
+    call uri "eth_protocolVersion" `Null    
+  
+  let syncing ~uri =
+    call uri "eth_syncing" `Null
+
+  let coinbase ~uri =
+    call uri "eth_coinbase" `Null
+
+  let mining ~uri =
+    call uri "eth_mining" `Null
+
+  let hashrate ~uri =
+    call uri "eth_hashrate" `Null
+
+  let gas_price ~uri =
+    call uri "eth_gasPrice" `Null
+
+  let accounts ~uri =
+    call uri "eth_accounts" `Null
+
+  let block_number ~uri =
+    call uri "eth_blockNumber" `Null
+
+  type time =
+    [`block of int | `latest | `earliest | `pending]
+
+  let time_to_json (at_time : time) =
+    match at_time with
+      | `block i  -> `Int i
+      | `latest   -> `String "latest"
+      | `earliest -> `String "earliest"
+      | `pending  -> `String "pending"    
+
+  let get_balance ~uri ~address ~(at_time : time) =
+    let time = time_to_json at_time in
+    let params = `List [ `String address; time ] in
+    call uri "eth_getBalance" params
+
+  let get_storage_at ~uri ~address ~position ~(at_time : time) =
+    let time = time_to_json at_time in
+    let params = `List [ `String address; `Int position; time ] in
+    call uri "eth_getStorageAt" params
+
+  let get_transaction_count ~uri ~address ~(at_time : time) =
+    let time = time_to_json at_time in
+    let params = `List [ `String address; time ] in
+    call uri "eth_getTransactionCount" params
+
+  let get_transaction_count_by_hash ~uri ~block_hash =
+    call uri "eth_getTransactionCountByHash" (`String block_hash)
+
+  let get_transaction_count_by_number ~uri ~(at_time : time) =
+    call uri "eth_getTransactionCountByNumber" (time_to_json at_time)
+
+  (* eth_getUncleCountByBlockHash, eth_getUncleCountByBlockNumber *)
+
+  let get_code ~uri ~address ~(at_time : time) =
+    let params = `List [ `String address; time_to_json at_time ] in
+    call uri "eth_getCode" params
+
+  let sign ~uri ~address ~message =
+    call uri "eth_sign" (`List [`String address; `String message])
+
+  let send_transaction ~uri ~transaction =
+    let open Types in
+    let args =
+      [
+        ("from", `String transaction.src);
+        ("to", `String transaction.dst);
+      ] @
+      (match transaction.gas with Some x -> [("gas", `Int x)] | _ -> []) @
+      (match transaction.gas_price with Some x -> [("gasPrice", `Int x)] | _ -> []) @
+      (match transaction.value with Some x -> [("value", `Int x)] | _ -> []) @
+      [("data", `String transaction.data)] @
+      (match transaction.nonce with Some x -> [("nonce", `Int x)] | _ -> [])
+    in
+    call uri "eth_sendTransaction" (`Assoc args)
+
+  (* sendRawTransaction *)
+  (* call *)
+  (* estimateGas *)
+  (* getBlockByHash/byNumber, etc *)
+  (* getTransactionReceipt *)
+  
+end
   
   
 module Personal =
@@ -99,6 +205,8 @@ struct
 
   let node_info ~uri =
     call uri "admin_nodeInfo" `Null
-    
+
+  let peers ~uri =
+    call uri "admin_peers" `Null
 
 end
