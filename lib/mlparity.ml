@@ -8,3 +8,5 @@ module Parity = Parity
 module GethInit = GethInit
 
 module Contract = Contract
+module Evm = Evm
+module Asm = Asm
