@@ -9,7 +9,7 @@ let uri = "http://localhost:8545"
 let passphrase = "test"
 let account = Personal.new_account ~uri ~passphrase
 
-(* this account wil receive the rewards for mining blocks *)
+(* this account will receive the rewards for mining blocks *)
 let _ = assert (Miner.set_ether_base ~uri ~address:account)
 
 (* start mining *)
@@ -28,7 +28,7 @@ let _ =
 let create_contract () =
   let program =
     (* An ASM program is a list of named blocks (the names are useful for jumping).
-       Here, the programs add 4 to 5 and returns. *)
+       Here, the program adds 4 to 5 and returns. *)
     let open Asm in
     [
       { name   = None;
@@ -42,7 +42,7 @@ let create_contract () =
             Push { width = 1 };
             Lit (Evm.literal_of_int 0);
             Mstore;
-            (* specify that the result is between addesses 0 and 7 of the local mem *)
+            (* specify that the result is between addesses 0 and 0+32 of the local mem *)
             Push { width = 1 };
             Lit (Evm.literal_of_int 32); (* Mstore stores words of length 32 bytes. *)
             Push { width = 1 };
