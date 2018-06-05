@@ -1,8 +1,55 @@
+module type FixedLengthString =
+sig
+
+  type t
+
+  val bytes : int
+
+  val to_hex : t -> string
+
+  val from_hex : string -> t
+
+end
+
+module Hash256 : FixedLengthString =
+struct
+
+  type t = string
+
+  let bytes = 256
+
+  let to_hex (x : t) = x
+
+  let from_hex (x : string) =
+    if String.length x != (bytes * 2) then
+      failwith "Address.from_hexadecimal_repr: address is not 20 bytes long"
+    else
+      x
+end
+
+module Address : FixedLengthString =
+struct
+
+  type t = string
+
+  let bytes = 20
+
+  let to_hex (x : t) = x
+
+  let from_hex (x : string) =
+    if String.length x != (bytes * 2) then
+      failwith "Address.from_hexadecimal_repr: address is not 20 bytes long"
+    else
+      x
+end
+
+type wei       = int (* Z.t ? *)
+type block_id  = int (* Z.t ? *)
 
 type transaction =
   {
-    src : string;
-    dst : string option;
+    src : Address.t;
+    dst : Address.t option;
     gas : int option;
     gas_price : int option;
     value : int option;
@@ -16,8 +63,8 @@ type transaction_receipt =
     block_number : int;
     contract_address : string option;
     cumulative_gas_used : int;
-    src : string; (* from *)
-    dst : string option;  (* to *)
+    src : Address.t; (* from *)
+    dst : Address.t option;  (* to *)
     gas_used : int;
     logs : string list;
     (* logs_bloom : string;
@@ -33,8 +80,8 @@ let hex i =
 let transaction_to_json : transaction -> Yojson.Basic.json =
   fun t ->
     let args =
-      [ ("from", `String t.src) ]
-      @ (match t.dst with Some x -> [("to", `String x)] | _ -> [])
+      [ ("from", `String (Address.to_hex t.src)) ]
+      @ (match t.dst with Some x -> [("to", `String (Address.to_hex x))] | _ -> [])
       @ (match t.gas with Some x -> [("gas", hex x)] | _ -> [])
       @ (match t.gas_price with Some x -> [("gasPrice", hex x)] | _ -> [])
       @ (match t.value with Some x -> [("value", hex x)] | _ -> [])
@@ -65,10 +112,10 @@ let receipt_from_json : Yojson.Basic.json -> transaction_receipt option =
         in
         let cumulative_gas_used = assoc "cumulativeGasUsed" fields |> Tools.drop_int_as_string in
         let gas_used = assoc "gasUsed" fields |> Tools.drop_int_as_string in    
-        let src = assoc "from" fields |> Tools.drop_string in
+        let src = assoc "from" fields |> Tools.drop_string |> Address.from_hex in
         let dst =
           match assoc "to" fields with
-          | `String addr -> Some addr
+          | `String addr -> Some (Address.from_hex addr)
           | `Null        -> None
           | _ ->
             failwith "Types.receipt_from_json: unexpected result"
