@@ -1,13 +1,11 @@
+open Types
+
 open Batteries
-open Ssh_client
+
 
 (* An Ethereum address corresponding to a private key k_r is the 
    rightmost truncation to 160 bit of a 256 bit Keccak hash
    of the corresponding ECDSA public key. Cf Yellow Paper. *)
-type address   = string
-type long_hash = string
-type wei       = int
-type block_id  = int
 
 module Genesis =
 struct
@@ -32,7 +30,7 @@ struct
     config : config;
 
     (** List of accounts with pre-allocated money.  *)
-    alloc : (address * wei) list;
+    alloc : (Address.t * wei) list;
 
     (** The 160-bit address to which all rewards (in Ether) collected from the
         successful mining of this block have been transferred. They are a sum of
@@ -41,7 +39,7 @@ struct
         in the online documentation. This can be anything in the Genesis Block 
         since the value is set by the setting of the Miner when a new Block is
         created. *)
-    coinbase : address;
+    coinbase : Address.t;
 
     (** A scalar value corresponding to the difficulty level applied during the
         nonce discovering of this block. It defines the Mining Target, which
@@ -81,13 +79,13 @@ struct
         of a Block can verified very quickly.
     *)
     nonce : int;
-    mix_hash : long_hash;
+    mix_hash : Hash256.t;
 
     (** The Keccak256 hash of the entire parent block’s header (including 
         its nonce and mixhash). Pointer to the parent block, thus effectively 
         building the chain of blocks. In the case of the Genesis block, and only
         in this case, it's 0. *)
-    parent_hash : long_hash;
+    parent_hash : Hash256.t;
 
     (* timestamp of original block in seconds from Epoch *)
     timestamp : int
@@ -96,7 +94,8 @@ struct
   let hex_of_int i =
     Printf.sprintf "0x%x" i
 
-  let to_json block =
+  let to_json : t -> Yojson.Basic.json =
+    fun block ->
     let config = ("config", `Assoc [
         ("chainId", `Int block.config.chain_id);
         ("homesteadBlock", `Int block.config.homestead_block);
@@ -105,7 +104,7 @@ struct
       ]) in
     let alloc =
       let balances = List.map (fun (addr, wei) ->
-          (addr, `Assoc [ ("balance", `String (string_of_int wei)) ])
+          (Address.to_hex addr, `Assoc [ ("balance", `String (string_of_int wei)) ])
         ) block.alloc
       in
       ("alloc", `Assoc balances)
@@ -113,13 +112,13 @@ struct
     `Assoc [
       config;
       alloc;
-      ("coinbase", `String block.coinbase);
+      ("coinbase", `String (Address.to_hex block.coinbase));
       ("difficulty", `String (hex_of_int block.difficulty));
       ("extraData", `String block.extra_data);
       ("gasLimit", `String (hex_of_int block.gas_limit));
       ("nonce", `String (hex_of_int block.nonce));
-      ("mixhash", `String block.mix_hash);
-      ("parentHash", `String block.parent_hash);
+      ("mixhash", `String (Hash256.to_hex block.mix_hash));
+      ("parentHash", `String (Hash256.to_hex block.parent_hash));
       ("timestamp", `String (hex_of_int block.timestamp))
     ]
 
@@ -252,16 +251,17 @@ let write_genesis genesis_block root_dir mode session =
   File.with_file_out
     ~mode:[`create;`text]
     ~perm:(File.unix_perm mode) local_genesis (fun fd ->
-        let json_str = genesis_block |> Genesis.to_json |> Yojson.to_string in
+        let json_str = genesis_block |> Genesis.to_json |> Yojson.Basic.to_string in
         output_string fd json_str
       );
-  Easy.scp
+  Ssh_client.Easy.scp
     ~session
     ~src_path:local_genesis
     ~dst_path:(root_dir // "genesis.json")
     ~mode
 
 let login_target target f =
+  let open Ssh_client in
   let options =
     {
       Easy.host = target.ip_address;
@@ -302,7 +302,7 @@ let port_is_free shell port =
 
 let port_is_free_on_host port target =
   login_target target (fun session ->
-      Easy.with_shell_channel ~session (fun shell greet_string ->
+      Ssh_client.Easy.with_shell_channel ~session (fun shell greet_string ->
           port_is_free shell port
         )
     )
@@ -342,7 +342,7 @@ let start_no_discover geth_cfg target =
   in
   let enode =
     login_target target (fun session ->
-        Easy.with_shell_channel ~session (fun shell greet_string ->
+        Ssh_client.Easy.with_shell_channel ~session (fun shell greet_string ->
             create_directories shell;
             write_genesis geth_cfg.genesis_block geth_cfg.root_directory 0o640 session;
             log_exec shell init;
@@ -363,14 +363,14 @@ let add_peers target peers =
     Geth.(make [Exec js_cmd] (Some (Attach (Some rpc_addr))))
   in
   login_target target (fun session ->
-      Easy.with_shell_channel ~session (fun shell greet_string ->
+      Ssh_client.Easy.with_shell_channel ~session (fun shell greet_string ->
           List.iter ((log_exec shell) % add_peer) peers
         )
     )
 
 let revert_deploy geth_config target =
   login_target target (fun session ->
-      Easy.with_shell_channel ~session (fun shell greet_string ->
+      Ssh_client.Easy.with_shell_channel ~session (fun shell greet_string ->
           (* I should rather get the PIDs of the running processes, this is just ugly... *)              
           log_exec shell (Shell.of_string "killall geth");
           log_exec shell (Shell.rm_fr geth_config.root_directory);
