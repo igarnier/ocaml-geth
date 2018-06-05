@@ -194,7 +194,7 @@ module Admin =
 struct
 
   let add_peer ~uri ~peer_url =
-    rpc_call uri "admin_addPeer" (`String peer_url)
+    rpc_call uri "admin_addPeer" (`List [`String peer_url])
 
   let datadir ~uri =
     rpc_call uri "admin_datadir" `Null
