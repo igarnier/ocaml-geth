@@ -44,6 +44,9 @@ let call uri method_name params =
   print_endline ans;
   Yojson.Basic.from_string ans
 
+
+(* https://github.com/ethereum/wiki/wiki/JSON-RPC#json-rpc-api-reference *)
+
 module Net =
 struct
 
