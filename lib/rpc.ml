@@ -187,7 +187,7 @@ struct
   let set_ether_base ~uri ~address =
     let args = `List [`String address] in
     rpc_call uri "miner_setEtherbase" args |> Tools.bool
-  
+
 end
 
 module Admin =
@@ -198,7 +198,7 @@ struct
 
   let datadir ~uri =
     rpc_call uri "admin_datadir" `Null
-
+      
   let node_info ~uri =
     rpc_call uri "admin_nodeInfo" `Null
 

@@ -21,9 +21,9 @@ struct
   let to_hex (x : t) = x
 
   let from_hex (x : string) =
-    if String.length x != (bytes * 2) then
-      failwith "Address.from_hexadecimal_repr: address is not 20 bytes long"
-    else
+    (* if String.length x != (bytes * 2) then
+     *   failwith "Hash256.from_hexadecimal_repr: address is not 256 bytes long"
+     * else *)
       x
 end
 
@@ -37,9 +37,9 @@ struct
   let to_hex (x : t) = x
 
   let from_hex (x : string) =
-    if String.length x != (bytes * 2) then
-      failwith "Address.from_hexadecimal_repr: address is not 20 bytes long"
-    else
+    (* if String.length x != (bytes * 2) then
+     *   failwith "Address.from_hexadecimal_repr: address is not 20 bytes long"
+     * else *)
       x
 end
 
