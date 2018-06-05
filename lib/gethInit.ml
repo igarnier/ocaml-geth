@@ -131,6 +131,7 @@ type geth_config = {
   root_directory : string;
   data_subdir    : string;
   source_subdir  : string;
+  (* TODO: geth command line options *)
 }
 
 (* Initializing an Ethereum network with Geth
@@ -330,7 +331,7 @@ let start_no_discover geth_cfg target =
                   NetworkId geth_cfg.network_id;
                   Verbosity 6;
                   IpcPath ipc_file;
-                  Rpc { rpcport = 8545; rpcaddr = "localhost"; rpcapis = "admin,web3,eth" }
+                  Rpc { rpcport = 8545; rpcaddr = "localhost"; rpcapis = "admin,web3,eth,personal,miner,net" }
                  ] None)
     in
     Shell.(screen cmd)

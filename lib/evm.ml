@@ -403,7 +403,7 @@ let length program =
   length program 0
 
 let dump (program : bytecode) =
-  String.concat "" (List.map string_of_bytecode program)
+  "0x"^(String.concat "" (List.map string_of_bytecode program))
 
 let bits_required positive_integer =
   let rec loop i acc =

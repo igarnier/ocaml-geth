@@ -20,6 +20,11 @@ and instr =
   | Pop
   | Jumpi of { block : string }
   | Jump of { block : string }
+  | Return
+  | Mload
+  | Mstore
+  | Sload
+  | Sstore
   | Lit of Evm.literal
 
 module M = Map.Make(String)
@@ -88,6 +93,11 @@ and instrs_to_bytecode instrs state =
       | Exp -> [instr EXP], 1
       | Pop -> [instr POP], 1
       | Eq  -> [instr EQ], 1
+      | Return -> [instr RETURN], 1
+      | Mload -> [instr MLOAD], 1
+      | Mstore -> [instr MSTORE], 1
+      | Sload -> [instr SLOAD], 1
+      | Sstore -> [instr SSTORE], 1
     in
     let state =
       { state with pc = state.pc + pc_incr }
