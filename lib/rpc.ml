@@ -55,6 +55,16 @@ end
 module Eth =
 struct
 
+  type time =
+    [`block of int | `latest | `earliest | `pending]
+
+
+  let time_to_json (at_time : time) =
+    match at_time with
+      | `block i  -> let _ = failwith "TODO" in `Int i
+      | `latest   -> `String "latest"
+      | `earliest -> `String "earliest"
+      | `pending  -> `String "pending"    
 
   let protocol_version ~uri =
     rpc_call uri "eth_protocolVersion" `Null |> Tools.int_as_string
@@ -63,7 +73,7 @@ struct
     rpc_call uri "eth_syncing" `Null |> Tools.bool
 
   let coinbase ~uri =
-    rpc_call uri "eth_coinbase" `Null |> Tools.string
+    rpc_call uri "eth_coinbase" `Null |> Tools.string |> Types.address_from_string
 
   let mining ~uri =
     rpc_call uri "eth_mining" `Null |> Tools.bool
@@ -75,38 +85,30 @@ struct
     rpc_call uri "eth_gasPrice" `Null |> Tools.int_as_string
 
   let accounts ~uri =
-    rpc_call uri "eth_accounts" `Null |> Tools.string_list
+    rpc_call uri "eth_accounts" `Null
+    |> Tools.string_list
+    |> List.map Types.address_from_string
 
   let block_number ~uri =
     rpc_call uri "eth_blockNumber" `Null |> Tools.int_as_string
 
-  type time =
-    [`block of int | `latest | `earliest | `pending]
-
-  let time_to_json (at_time : time) =
-    match at_time with
-      | `block i  -> let _ = failwith "TODO" in `Int i
-      | `latest   -> `String "latest"
-      | `earliest -> `String "earliest"
-      | `pending  -> `String "pending"    
-
   let get_balance ~uri ~address ~(at_time : time) =
     let time = time_to_json at_time in
-    let params = `List [ `String address; time ] in
+    let params = `List [ `String (Types.address_to_string address); time ] in
     rpc_call uri "eth_getBalance" params |> Tools.bigint_as_string
 
   let get_storage_at ~uri ~address ~position ~(at_time : time) =
     let time = time_to_json at_time in
-    let params = `List [ `String address; `String (Z.to_string position); time ] in
+    let params = `List [ `String (Types.address_to_string address); `String (Z.to_string position); time ] in
     rpc_call uri "eth_getStorageAt" params |> Tools.string
 
   let get_transaction_count ~uri ~address ~(at_time : time) =
     let time = time_to_json at_time in
-    let params = `List [ `String address; time ] in
+    let params = `List [ `String (Types.address_to_string address); time ] in
     rpc_call uri "eth_getTransactionCount" params |> Tools.int
 
   let get_transaction_count_by_hash ~uri ~block_hash =
-    let args = `List [`String block_hash] in
+    let args = `List [`String (Types.hash256_to_string block_hash)] in
     rpc_call uri "eth_getTransactionCountByHash" args |> Tools.int
 
   let get_transaction_count_by_number ~uri ~(at_time : time) =
@@ -116,19 +118,19 @@ struct
   (* eth_getUncleCountByBlockHash, eth_getUncleCountByBlockNumber *)
 
   let get_code ~uri ~address ~(at_time : time) =
-    let params = `List [ `String address; time_to_json at_time ] in
+    let params = `List [ `String (Types.address_to_string address); time_to_json at_time ] in
     rpc_call uri "eth_getCode" params |> Tools.string (* TODO: it would be nice to parse it back to bytecode *)
 
   let sign ~uri ~address ~message =
-    rpc_call uri "eth_sign" (`List [`String address; `String message]) |> Tools.string
+    rpc_call uri "eth_sign" (`List [`String (Types.address_to_string address); `String message]) |> Tools.string
 
   let send_transaction ~uri ~transaction =
     let args = `List [Types.transaction_to_json transaction] in
-    rpc_call uri "eth_sendTransaction" args |> Tools.string
+    rpc_call uri "eth_sendTransaction" args |> Tools.string |> Types.hash256_from_string
 
   let send_raw_transaction ~uri ~data =
     let args = `List [`String data] in
-    rpc_call uri "eth_sendRawTransaction" args |> Tools.string
+    rpc_call uri "eth_sendRawTransaction" args |> Tools.string  |> Types.hash256_from_string
 
   let call ~uri ~transaction ~(at_time : time) =
     rpc_call uri "eth_call" (`List [ Types.transaction_to_json transaction; time_to_json at_time ]) |> Tools.string
@@ -137,7 +139,7 @@ struct
   (* getBlockByHash/byNumber, etc *)
   (* getTransactionReceipt *)
   let get_transaction_receipt ~uri ~transaction_hash =
-    rpc_call uri "eth_getTransactionReceipt" (`List [ `String transaction_hash ])
+    rpc_call uri "eth_getTransactionReceipt" (`List [ `String (Types.hash256_to_string transaction_hash) ])
     |> Tools.result
     |> Types.receipt_from_json
       
@@ -146,25 +148,31 @@ end
   
 module Personal =
 struct
-  
+
+  open Types
+
   let send_transaction ~uri ~src ~dst ~value ~src_pwd =
     let value = Tools.hex_of_int value in
     let args  =
-        `List [`Assoc [ ("from", `String src);
-                        ("to", `String dst);
+        `List [`Assoc [ ("from", `String (address_to_string src));
+                        ("to", `String (address_to_string dst));
                         ("value", `String value) ];
                `String src_pwd
               ]
     in
-    rpc_call uri "personal_sendTransaction" args |> Tools.string
+    rpc_call uri "personal_sendTransaction" args
+    |> Tools.string
+    |> hash256_from_string
 
   let new_account ~uri ~passphrase =
     let args  = `List [`String passphrase] in
-    rpc_call uri "personal_newAccount" args |> Tools.string
+    rpc_call uri "personal_newAccount" args
+    |> Tools.string
+    |> address_from_string
 
   let unlock_account ~uri ~account ~passphrase ~unlock_duration =
     let args  =
-      `List[`String account; `String passphrase; `Int unlock_duration]
+      `List[`String (address_to_string account); `String passphrase; `Int unlock_duration]
     in
     rpc_call uri "personal_unlockAccount" args |> Tools.bool
   
@@ -175,7 +183,7 @@ struct
 
   let set_gas_price ~uri ~gas_price =
     let args = `String (Tools.hex_of_int gas_price) in
-    rpc_call uri "miner_setGasPrice" (`List [args])
+    rpc_call uri "miner_setGasPrice" (`List [args]) |> Tools.bool
 
   let start ~uri ~thread_count =
     let args = `Int thread_count in
@@ -185,7 +193,7 @@ struct
     rpc_call uri "miner_stop" `Null |> Tools.bool
 
   let set_ether_base ~uri ~address =
-    let args = `List [`String address] in
+    let args = `List [`String (Types.address_to_string address)] in
     rpc_call uri "miner_setEtherbase" args |> Tools.bool
 
 end
@@ -194,15 +202,15 @@ module Admin =
 struct
 
   let add_peer ~uri ~peer_url =
-    rpc_call uri "admin_addPeer" (`List [`String peer_url])
+    rpc_call uri "admin_addPeer" (`List [`String peer_url]) |> Tools.bool
 
   let datadir ~uri =
-    rpc_call uri "admin_datadir" `Null
+    rpc_call uri "admin_datadir" `Null |> Tools.string
       
   let node_info ~uri =
-    rpc_call uri "admin_nodeInfo" `Null
+    rpc_call uri "admin_nodeInfo" `Null |> Types.node_info_from_json
 
   let peers ~uri =
-    rpc_call uri "admin_peers" `Null
+    rpc_call uri "admin_peers" `Null |> Types.peer_info_from_json
 
 end

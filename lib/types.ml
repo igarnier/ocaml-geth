@@ -2,6 +2,8 @@ open Batteries
 
 type address = string
 type hash256 = string
+type hash512 = string
+  
     
 let char_is_hex = function
   | '0' .. '9'
@@ -31,8 +33,16 @@ let address_from_string x =
 let hash256_to_string x = x
   
 let hash256_from_string x =
-  if String.length x != 64 || not (string_is_hex x) then
+  if String.length x != 66 || not (string_is_hex x) then
     failwith "hash256_from_string: input must be 32 bytes (64 hex chars) 0x-prefixed"
+  else
+    x
+
+let hash512_to_string x = x
+  
+let hash512_from_string x =
+  if String.length x != 130 || not (string_is_hex x) then
+    failwith "hash512_from_string: input must be 64 bytes (128 hex chars) 0x-prefixed"
   else
     x
 
@@ -53,19 +63,63 @@ type transaction =
 
 type transaction_receipt =
   {
-    block_hash : string;
-    block_number : int;
-    contract_address : string option;
+    block_hash          : hash256;
+    block_number        : int;
+    contract_address    : address option;
     cumulative_gas_used : int;
-    src : address;
-    dst : address option;
-    gas_used : int;
-    logs : string list;
-    (* logs_bloom : string;
+    src                 : address;
+    dst                 : address option;
+    gas_used            : int;
+    logs                : string list;
+    (* unused:
+     * logs_bloom : string;
      * root : string; *)
-    transaction_hash : string;
-    transaction_index : int
+    transaction_hash    : hash256;
+    transaction_index   : int
   }
+
+
+type port_info =
+  {
+    discovery : int;
+    listener  : int
+  }
+
+type protocol_info =
+  Eth of {
+    difficulty : Z.t;
+    genesis    : hash256 option;
+    head       : hash256;
+    network    : int
+  }
+
+type node_info =
+  {
+    enode       : string;
+    id          : hash512;
+    ip          : string;
+    listen_addr : string;
+    name        : string;
+    ports       : port_info;
+    protocols   : protocol_info
+  }
+
+type network_info =
+  {
+    local_address  : string;
+    remote_address : string;
+  }
+
+type peer =
+  {
+    caps      : string list;
+    id        : hash512;
+    name      : string;
+    network   : network_info;
+    protocols : protocol_info;
+  }
+
+type peer_info = peer list
 
 
 let hex i =
@@ -134,18 +188,105 @@ let receipt_from_json : Yojson.Basic.json -> transaction_receipt option =
       let s = Yojson.Basic.to_string j in
       failwith ("Types.receipt_from_json: unexpected json: "^s)
 
-(*
-        {
-          "blockHash":"0xde1ddc84bfb3a2d2cfd4b8d64ebc35c861bafd93956a17c84d2560bea04af744",
-                      "blockNumber":"0x248",
-                      "contractAddress":"0x309fcd49e75914729b132466a339b3a9edc58db5",
-                      "cumulativeGasUsed":"0xd8e0",
-                      "from":"0x4b7815adb6e9b93200d4b377f91fa3a548d395bb",
-                      "gasUsed":"0xd8e0",
-                      "logs":[],
-                      "logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-                      "root":"0xc4e1180a575f0fdca4e2d969b332d55bcc2ca4031b858dc16df4c12e1c4eb7a7",
-                      "to":null,
-                      "transactionHash":"0x3f255dc3b38f7618f8cc20c50ed23f3baf16d7920f969ab28f01460754d0755b",
-                      "transactionIndex":"0x0"}
-*)
+let port_info_from_json : Yojson.Basic.json -> port_info option =
+  fun j ->
+    match j with
+    | `Assoc fields ->
+      let discovery = assoc "discovery" fields |> Tools.drop_int in
+      let listener  = assoc "listener" fields |> Tools.drop_int in
+      Some { discovery; listener }
+    | _ ->
+      None
+
+let protocol_info_from_json : Yojson.Basic.json -> protocol_info option =
+  fun j ->
+    let proto = Tools.drop_assoc j |> assoc "eth" in
+    match proto with
+    | `Assoc fields ->
+      (* TODO: use Json.Safe instead of Basic ... *)
+      let difficulty = assoc "difficulty" fields |> Tools.drop_int |> Z.of_int in
+      let genesis =
+        try Some (assoc "genesis" fields
+                  |> Tools.drop_string
+                  |> hash256_from_string)
+        with Not_found -> None
+      in
+      let head = assoc "head" fields
+                 |> Tools.drop_string
+                 |> hash256_from_string
+      in
+      let network = assoc "head" fields |> Tools.drop_int in
+      Some (Eth { difficulty; genesis; head; network })
+    | _ ->
+      None
+
+let node_info_from_json : Yojson.Basic.json -> node_info option =
+  fun j ->
+    match j with
+    | `Assoc fields ->
+      let enode = assoc "enode" fields |> Tools.drop_string in
+      let id = assoc "id" fields
+               |> Tools.drop_string
+               |> hash512_from_string
+      in
+      let ip = assoc "ip" fields |> Tools.drop_string in
+      let listen_addr = assoc "listenAddr" fields |> Tools.drop_string in
+      let name = assoc "name" fields |> Tools.drop_string in
+      let ports =
+        match assoc "ports" fields |> port_info_from_json with
+        | None -> failwith "node_info_from_json: can't parse port_info"
+        | Some port_info -> port_info
+      in
+      let protocols =
+        match assoc "protocols" fields |> protocol_info_from_json with
+        | None ->  failwith "node_info_from_json: can't parse protocol_info"
+        | Some protocol_info -> protocol_info
+      in
+      Some {
+        enode; id; ip; listen_addr; name; ports; protocols 
+      }
+    | _ ->
+      None
+
+let network_info_from_json : Yojson.Basic.json -> network_info option =
+  fun j ->
+    match j with
+    | `Assoc fields ->
+      let local_address  = assoc "localAddress" fields |> Tools.drop_string in
+      let remote_address = assoc "remoteAddress" fields |> Tools.drop_string in
+      Some { local_address; remote_address }
+    | _ ->
+      None
+
+let peer_from_json : Yojson.Basic.json -> peer option =
+  fun j ->
+    match j with
+    | `Assoc fields ->
+      let caps = assoc "caps" fields |> Tools.drop_string_list in
+      let id   = assoc "id" fields
+               |> Tools.drop_string
+               |> hash512_from_string
+      in
+      let name = assoc "name" fields |> Tools.drop_string in
+      let network =
+        match assoc "network" fields |> network_info_from_json with
+        | None -> failwith "peer_from_json: can't parse network back"
+        | Some network_info -> network_info
+      in                      
+      let protocols =
+        match assoc "protocols" fields |> protocol_info_from_json with
+        | None -> failwith "peer_from_json: can't parse protocol back"
+        | Some protocol -> protocol
+      in
+      Some { caps; id; name; network; protocols }
+    | _ ->
+      None
+
+let peer_info_from_json : Yojson.Basic.json -> peer_info =
+  fun j ->
+    let elts = Tools.drop_list j in
+    List.map (fun x ->
+        match peer_from_json x with
+        | None     -> failwith "peer_info_from_json: can't parse peer back"
+        | Some res -> res
+      ) elts
