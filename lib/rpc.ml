@@ -85,7 +85,7 @@ struct
 
   let time_to_json (at_time : time) =
     match at_time with
-      | `block i  -> `Int i
+      | `block i  -> let _ = failwith "TODO" in `Int i
       | `latest   -> `String "latest"
       | `earliest -> `String "earliest"
       | `pending  -> `String "pending"    

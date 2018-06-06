@@ -30,7 +30,7 @@ struct
     config : config;
 
     (** List of accounts with pre-allocated money.  *)
-    alloc : (Address.t * wei) list;
+    alloc : (address * wei) list;
 
     (** The 160-bit address to which all rewards (in Ether) collected from the
         successful mining of this block have been transferred. They are a sum of
@@ -39,7 +39,7 @@ struct
         in the online documentation. This can be anything in the Genesis Block 
         since the value is set by the setting of the Miner when a new Block is
         created. *)
-    coinbase : Address.t;
+    coinbase : address;
 
     (** A scalar value corresponding to the difficulty level applied during the
         nonce discovering of this block. It defines the Mining Target, which
@@ -78,14 +78,14 @@ struct
         the Mining Target. Just by using the nonce Proof-of-Work, the validity 
         of a Block can verified very quickly.
     *)
-    nonce : int;
-    mix_hash : Hash256.t;
+    nonce    : int;
+    mix_hash : hash256;
 
     (** The Keccak256 hash of the entire parent block’s header (including 
         its nonce and mixhash). Pointer to the parent block, thus effectively 
         building the chain of blocks. In the case of the Genesis block, and only
         in this case, it's 0. *)
-    parent_hash : Hash256.t;
+    parent_hash : hash256;
 
     (* timestamp of original block in seconds from Epoch *)
     timestamp : int
@@ -104,7 +104,7 @@ struct
       ]) in
     let alloc =
       let balances = List.map (fun (addr, wei) ->
-          (Address.to_hex addr, `Assoc [ ("balance", `String (string_of_int wei)) ])
+          (address_to_string addr, `Assoc [ ("balance", `String (string_of_int wei)) ])
         ) block.alloc
       in
       ("alloc", `Assoc balances)
@@ -112,13 +112,13 @@ struct
     `Assoc [
       config;
       alloc;
-      ("coinbase", `String (Address.to_hex block.coinbase));
+      ("coinbase", `String (address_to_string block.coinbase));
       ("difficulty", `String (hex_of_int block.difficulty));
       ("extraData", `String block.extra_data);
       ("gasLimit", `String (hex_of_int block.gas_limit));
       ("nonce", `String (hex_of_int block.nonce));
-      ("mixhash", `String (Hash256.to_hex block.mix_hash));
-      ("parentHash", `String (Hash256.to_hex block.parent_hash));
+      ("mixhash", `String (hash256_to_string block.mix_hash));
+      ("parentHash", `String (hash256_to_string block.parent_hash));
       ("timestamp", `String (hex_of_int block.timestamp))
     ]
 

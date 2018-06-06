@@ -1,55 +1,49 @@
-module type FixedLengthString =
-sig
+open Batteries
 
-  type t
+type address = string
+type hash256 = string
+    
+let char_is_hex = function
+  | '0' .. '9'
+  | 'A' .. 'F'
+  | 'a' .. 'f' -> true
+  | _ -> false
 
-  val bytes : int
+let string_is_hex x =
+  let rec loop i len x acc =
+    if i = len then
+      acc
+    else
+      loop (i+1) len x (acc && char_is_hex x.[i])
+  in
+  x.[0] = '0'
+  && (x.[1] = 'x' || x.[1] = 'X')
+  && (loop 2 (String.length x) x true)
 
-  val to_hex : t -> string
+let address_to_string x = x
 
-  val from_hex : string -> t
+let address_from_string x =
+  if String.length x != 42 || not (string_is_hex x) then
+    failwith "address_from_string: input must be 20 bytes (40 hex chars) 0x-prefixed"
+  else
+    x
 
-end
+let hash256_to_string x = x
+  
+let hash256_from_string x =
+  if String.length x != 64 || not (string_is_hex x) then
+    failwith "hash256_from_string: input must be 32 bytes (64 hex chars) 0x-prefixed"
+  else
+    x
 
-module Hash256 : FixedLengthString =
-struct
-
-  type t = string
-
-  let bytes = 256
-
-  let to_hex (x : t) = x
-
-  let from_hex (x : string) =
-    (* if String.length x != (bytes * 2) then
-     *   failwith "Hash256.from_hexadecimal_repr: address is not 256 bytes long"
-     * else *)
-      x
-end
-
-module Address : FixedLengthString =
-struct
-
-  type t = string
-
-  let bytes = 20
-
-  let to_hex (x : t) = x
-
-  let from_hex (x : string) =
-    (* if String.length x != (bytes * 2) then
-     *   failwith "Address.from_hexadecimal_repr: address is not 20 bytes long"
-     * else *)
-      x
-end
 
 type wei       = int (* Z.t ? *)
 type block_id  = int (* Z.t ? *)
 
 type transaction =
   {
-    src : Address.t;
-    dst : Address.t option;
+    src : address;
+    dst : address option;
     gas : int option;
     gas_price : int option;
     value : int option;
@@ -63,8 +57,8 @@ type transaction_receipt =
     block_number : int;
     contract_address : string option;
     cumulative_gas_used : int;
-    src : Address.t; (* from *)
-    dst : Address.t option;  (* to *)
+    src : address;
+    dst : address option;
     gas_used : int;
     logs : string list;
     (* logs_bloom : string;
@@ -80,8 +74,8 @@ let hex i =
 let transaction_to_json : transaction -> Yojson.Basic.json =
   fun t ->
     let args =
-      [ ("from", `String (Address.to_hex t.src)) ]
-      @ (match t.dst with Some x -> [("to", `String (Address.to_hex x))] | _ -> [])
+      [ ("from", `String (address_to_string t.src)) ]
+      @ (match t.dst with Some x -> [("to", `String (address_to_string x))] | _ -> [])
       @ (match t.gas with Some x -> [("gas", hex x)] | _ -> [])
       @ (match t.gas_price with Some x -> [("gasPrice", hex x)] | _ -> [])
       @ (match t.value with Some x -> [("value", hex x)] | _ -> [])
@@ -112,10 +106,10 @@ let receipt_from_json : Yojson.Basic.json -> transaction_receipt option =
         in
         let cumulative_gas_used = assoc "cumulativeGasUsed" fields |> Tools.drop_int_as_string in
         let gas_used = assoc "gasUsed" fields |> Tools.drop_int_as_string in    
-        let src = assoc "from" fields |> Tools.drop_string |> Address.from_hex in
+        let src = assoc "from" fields |> Tools.drop_string |> address_from_string in
         let dst =
           match assoc "to" fields with
-          | `String addr -> Some (Address.from_hex addr)
+          | `String addr -> Some (address_from_string addr)
           | `Null        -> None
           | _ ->
             failwith "Types.receipt_from_json: unexpected result"
