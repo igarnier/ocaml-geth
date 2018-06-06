@@ -15,6 +15,7 @@ and instr =
   | Div
   | Exp
   | Eq
+  | Not
   | Push of { width : int }
   | Dup  of { level : int }
   | Pop
@@ -54,15 +55,14 @@ let rec to_bytecode_aux blocks state =
     (state, blockp @ tailp)
 
 and block_to_bytecode { name; instrs } (state : state) =
-  let state =
-    match name with
-    | None -> state
-    | Some name ->
-      add_jump name state.pc state
-  in
-  let state = incr_pc state in
-  let state, instrs = instrs_to_bytecode instrs state in
-  (state, (instr Evm.JUMPDEST) :: instrs)
+  match name with
+  | None ->
+    instrs_to_bytecode instrs state
+  | Some name ->
+    let state = add_jump name state.pc state in
+    let state = incr_pc state in
+    let state, instrs = instrs_to_bytecode instrs state in
+    (state, (instr Evm.JUMPDEST) :: instrs)
 
 and instrs_to_bytecode instrs state =
   match instrs with
@@ -93,6 +93,7 @@ and instrs_to_bytecode instrs state =
       | Exp -> [instr EXP], 1
       | Pop -> [instr POP], 1
       | Eq  -> [instr EQ], 1
+      | Not -> [instr NOT], 1               
       | Return -> [instr RETURN], 1
       | Mload -> [instr MLOAD], 1
       | Mstore -> [instr MSTORE], 1
