@@ -41,8 +41,12 @@ let hash256_from_string x =
 let hash512_to_string x = x
   
 let hash512_from_string x =
-  if String.length x != 130 || not (string_is_hex x) then
-    failwith "hash512_from_string: input must be 64 bytes (128 hex chars) 0x-prefixed"
+  let len = String.length x in
+  if len != 130 || not (string_is_hex x) then
+    let open Printf in
+    let msg = sprintf "hash512_from_string: input must be 64 bytes (128 hex chars) 0x-prefixed.\
+ Got %s, length %d instead." x len in
+    failwith msg
   else
     x
 
@@ -215,7 +219,7 @@ let protocol_info_from_json : Json.json -> protocol_info option =
                  |> Json.drop_string
                  |> hash256_from_string
       in
-      let network = assoc "head" fields |> Json.drop_int in
+      let network = assoc "network" fields |> Json.drop_int in
       Some (Eth { difficulty; genesis; head; network })
     | _ ->
       None
@@ -227,6 +231,7 @@ let node_info_from_json : Json.json -> node_info option =
       let enode = assoc "enode" fields |> Json.drop_string in
       let id = assoc "id" fields
                |> Json.drop_string
+               |> (fun x -> "0x"^x) (* HACK: for some reason geth does not prefix the hash with 0x. *)
                |> hash512_from_string
       in
       let ip = assoc "ip" fields |> Json.drop_string in

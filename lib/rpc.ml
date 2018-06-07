@@ -210,9 +210,9 @@ struct
     rpc_call uri "admin_datadir" `Null |> Json.string
       
   let node_info ~uri =
-    rpc_call uri "admin_nodeInfo" `Null |> Types.node_info_from_json
+    rpc_call uri "admin_nodeInfo" `Null |> Json.result |> Types.node_info_from_json
 
   let peers ~uri =
-    rpc_call uri "admin_peers" `Null |> Types.peer_info_from_json
+    rpc_call uri "admin_peers" `Null |> Json.result |> Types.peer_info_from_json
 
 end

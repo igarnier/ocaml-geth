@@ -26,7 +26,7 @@ let drop_int (x : json) =
 let drop_bigint (x : json) =
   match x with
   | `Intlit n -> Z.of_string n
-  | _ -> failwith ("drop_int: bad argument "^(clean_dump x))
+  | _ -> failwith ("drop_bigint: bad argument "^(clean_dump x))
 
 let drop_list (x : json) =
   match x with
