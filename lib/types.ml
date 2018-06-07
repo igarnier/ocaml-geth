@@ -123,9 +123,9 @@ type peer_info = peer list
 
 
 let hex i =
-  `String (Tools.hex_of_int i)
+  `String (Json.hex_of_int i)
 
-let transaction_to_json : transaction -> Yojson.Basic.json =
+let transaction_to_json : transaction -> Json.json =
   fun t ->
     let args =
       [ ("from", `String (address_to_string t.src)) ]
@@ -143,14 +143,14 @@ let assoc key fields =
   | Not_found ->
     failwith (Printf.sprintf "assoc: key %s not found" key)
 
-let receipt_from_json : Yojson.Basic.json -> transaction_receipt option =
+let receipt_from_json : Json.json -> transaction_receipt option =
   fun j ->
     match j with
     | `Null -> None
     | `Assoc fields ->
       begin
-        let block_hash   = assoc "blockHash" fields |> Tools.drop_string in
-        let block_number = assoc "blockNumber" fields |> Tools.drop_int_as_string in
+        let block_hash   = assoc "blockHash" fields |> Json.drop_string in
+        let block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
         let contract_address =
           match assoc "contractAddress" fields with
           | `String addr -> Some addr
@@ -158,9 +158,9 @@ let receipt_from_json : Yojson.Basic.json -> transaction_receipt option =
           | _ ->
             failwith "Types.receipt_from_json: unexpected result"
         in
-        let cumulative_gas_used = assoc "cumulativeGasUsed" fields |> Tools.drop_int_as_string in
-        let gas_used = assoc "gasUsed" fields |> Tools.drop_int_as_string in    
-        let src = assoc "from" fields |> Tools.drop_string |> address_from_string in
+        let cumulative_gas_used = assoc "cumulativeGasUsed" fields |> Json.drop_int_as_string in
+        let gas_used = assoc "gasUsed" fields |> Json.drop_int_as_string in    
+        let src = assoc "from" fields |> Json.drop_string |> address_from_string in
         let dst =
           match assoc "to" fields with
           | `String addr -> Some (address_from_string addr)
@@ -168,9 +168,9 @@ let receipt_from_json : Yojson.Basic.json -> transaction_receipt option =
           | _ ->
             failwith "Types.receipt_from_json: unexpected result"
         in
-        let logs = assoc "logs" fields |> Tools.drop_string_list in
-        let transaction_hash = assoc "transactionHash" fields |> Tools.drop_string in
-        let transaction_index = assoc "transactionIndex" fields |> Tools.drop_int_as_string in
+        let logs = assoc "logs" fields |> Json.drop_string_list in
+        let transaction_hash = assoc "transactionHash" fields |> Json.drop_string in
+        let transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
         Some {
           block_hash;
           block_number;
@@ -185,53 +185,53 @@ let receipt_from_json : Yojson.Basic.json -> transaction_receipt option =
         }
       end
     | _ ->
-      let s = Yojson.Basic.to_string j in
+      let s = Yojson.Safe.to_string j in
       failwith ("Types.receipt_from_json: unexpected json: "^s)
 
-let port_info_from_json : Yojson.Basic.json -> port_info option =
+let port_info_from_json : Json.json -> port_info option =
   fun j ->
     match j with
     | `Assoc fields ->
-      let discovery = assoc "discovery" fields |> Tools.drop_int in
-      let listener  = assoc "listener" fields |> Tools.drop_int in
+      let discovery = assoc "discovery" fields |> Json.drop_int in
+      let listener  = assoc "listener" fields |> Json.drop_int in
       Some { discovery; listener }
     | _ ->
       None
 
-let protocol_info_from_json : Yojson.Basic.json -> protocol_info option =
+let protocol_info_from_json : Json.json -> protocol_info option =
   fun j ->
-    let proto = Tools.drop_assoc j |> assoc "eth" in
+    let proto = Json.drop_assoc j |> assoc "eth" in
     match proto with
     | `Assoc fields ->
-      (* TODO: use Json.Safe instead of Basic ... *)
-      let difficulty = assoc "difficulty" fields |> Tools.drop_int |> Z.of_int in
+      (* TODO: use Json.Safe instead of Safe ... *)
+      let difficulty = assoc "difficulty" fields |> Json.drop_int |> Z.of_int in
       let genesis =
         try Some (assoc "genesis" fields
-                  |> Tools.drop_string
+                  |> Json.drop_string
                   |> hash256_from_string)
         with Not_found -> None
       in
       let head = assoc "head" fields
-                 |> Tools.drop_string
+                 |> Json.drop_string
                  |> hash256_from_string
       in
-      let network = assoc "head" fields |> Tools.drop_int in
+      let network = assoc "head" fields |> Json.drop_int in
       Some (Eth { difficulty; genesis; head; network })
     | _ ->
       None
 
-let node_info_from_json : Yojson.Basic.json -> node_info option =
+let node_info_from_json : Json.json -> node_info option =
   fun j ->
     match j with
     | `Assoc fields ->
-      let enode = assoc "enode" fields |> Tools.drop_string in
+      let enode = assoc "enode" fields |> Json.drop_string in
       let id = assoc "id" fields
-               |> Tools.drop_string
+               |> Json.drop_string
                |> hash512_from_string
       in
-      let ip = assoc "ip" fields |> Tools.drop_string in
-      let listen_addr = assoc "listenAddr" fields |> Tools.drop_string in
-      let name = assoc "name" fields |> Tools.drop_string in
+      let ip = assoc "ip" fields |> Json.drop_string in
+      let listen_addr = assoc "listenAddr" fields |> Json.drop_string in
+      let name = assoc "name" fields |> Json.drop_string in
       let ports =
         match assoc "ports" fields |> port_info_from_json with
         | None -> failwith "node_info_from_json: can't parse port_info"
@@ -248,26 +248,26 @@ let node_info_from_json : Yojson.Basic.json -> node_info option =
     | _ ->
       None
 
-let network_info_from_json : Yojson.Basic.json -> network_info option =
+let network_info_from_json : Json.json -> network_info option =
   fun j ->
     match j with
     | `Assoc fields ->
-      let local_address  = assoc "localAddress" fields |> Tools.drop_string in
-      let remote_address = assoc "remoteAddress" fields |> Tools.drop_string in
+      let local_address  = assoc "localAddress" fields |> Json.drop_string in
+      let remote_address = assoc "remoteAddress" fields |> Json.drop_string in
       Some { local_address; remote_address }
     | _ ->
       None
 
-let peer_from_json : Yojson.Basic.json -> peer option =
+let peer_from_json : Json.json -> peer option =
   fun j ->
     match j with
     | `Assoc fields ->
-      let caps = assoc "caps" fields |> Tools.drop_string_list in
+      let caps = assoc "caps" fields |> Json.drop_string_list in
       let id   = assoc "id" fields
-               |> Tools.drop_string
+               |> Json.drop_string
                |> hash512_from_string
       in
-      let name = assoc "name" fields |> Tools.drop_string in
+      let name = assoc "name" fields |> Json.drop_string in
       let network =
         match assoc "network" fields |> network_info_from_json with
         | None -> failwith "peer_from_json: can't parse network back"
@@ -282,9 +282,9 @@ let peer_from_json : Yojson.Basic.json -> peer option =
     | _ ->
       None
 
-let peer_info_from_json : Yojson.Basic.json -> peer_info =
+let peer_info_from_json : Json.json -> peer_info =
   fun j ->
-    let elts = Tools.drop_list j in
+    let elts = Json.drop_list j in
     List.map (fun x ->
         match peer_from_json x with
         | None     -> failwith "peer_info_from_json: can't parse peer back"

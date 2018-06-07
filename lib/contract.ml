@@ -2,7 +2,7 @@ open Batteries
     
 (* https://solidity.readthedocs.io/en/develop/abi-spec.html *)
 
-module Types =
+module SolidityTypes =
 struct
 
   type bitwidth = int (* mod 8 = 0, 0 < bitwidth <= 256*)
@@ -22,12 +22,18 @@ struct
 
 end
 
+type value =
+  | Int of int
+  | Bool of bool
+  | Addr of Types.address
+
+
 (* Function description: [method_abi]. *)
 
 (*
-Constructor and fallback function never have name or outputs. Fallback function doesn’t have inputs either.
-
-Sending non-zero ether to non-payable function will throw. Don’t do it.
+"Constructor and Callback function never have name or outputs. 
+ Callback function doesn’t have inputs either.
+ Sending non-zero ether to non-payable function will throw. Don’t do it."
 *)
 
 type method_abi =
@@ -44,7 +50,7 @@ type method_abi =
 and tuple_abi = named_arg list
 
 and named_arg = { arg_name : string;
-                  arg_type : Types.t }
+                  arg_type : SolidityTypes.t }
 
 and mtype =
   | Function
@@ -57,11 +63,23 @@ and mutability =
   | Nonpayable
   | Payable
 
+type solidity_output =
+  {
+    version   : string;
+    contracts : solidity_contract list
+  }
+
+and solidity_contract =
+  {
+    contract_name : string;
+    bin           : string;
+    abi           : method_abi list;
+  }
 
 open Printf
 
 let rec encoding_of_type =
-  let open Types in
+  let open SolidityTypes in
   function
   | Tuint { w } -> sprintf "uint%d" w
   | Tint { w }  -> sprintf "int%d" w
@@ -87,4 +105,124 @@ let string_of_signature { m_name; m_inputs } =
 let method_id method_abi =
   let hash = Cryptokit.Hash.keccak 256 in
   Cryptokit.hash_string hash (string_of_signature method_abi)
-  
+
+let exec_and_get_stdout command args =
+  let output, input = Unix.pipe () in  
+  let this_pid      = Unix.fork () in
+  if this_pid < 0 then
+    failwith "exec_and_get_stdout: error while forking"
+  else if this_pid = 0 then begin
+    Unix.dup2 input Unix.stdout;
+    Unix.close output;
+    Unix.close input;
+    Unix.execvp command args
+  end else begin
+    Unix.close input;
+    let _, status = Unix.wait () in
+    match status with
+    | WEXITED 0 ->
+      let res = IO.read_all (Unix.in_channel_of_descr output) in
+      Unix.close output;
+      res
+    | WEXITED n ->
+      let m =
+        Printf.sprintf "exec_and_get_stdout: abnormal termination of child process (code %d)" n
+      in
+      failwith m
+    | WSIGNALED n ->
+      let m =
+        Printf.sprintf "exec_and_get_stdout: abnormal termination of child process (signal %d)" n
+      in
+      failwith m
+    | WSTOPPED n ->
+      let m =
+        Printf.sprintf "exec_and_get_stdout: abnormal termination of child process (stopped %d)" n
+      in
+      failwith m          
+  end
+
+let _ =
+  "[{\"constant\":false,\"inputs\":[{\"name\":\"data\",\"type\":\"uint256\"}],\"name\":\"set\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"get\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"ty" (* string length 298; truncated *)
+
+
+
+let abi_method_type_from_json mtype =
+  match mtype with
+  | `String mtype ->
+    (match mtype with
+     | "function" -> Function
+     | "constructor" -> Constructor
+     | "callback" -> Callback
+     | _ ->
+       failwith ("abi_method_type_from_json: incorrect method type "^mtype)       
+    )
+  | _ ->
+    let dump = Json.to_string mtype in
+    failwith ("abi_type_from_json: can't decode "^dump)
+
+let abi_mutability_from_string str =
+  match str with
+  | "pure" ->
+    Pure
+  | "view" ->
+    View
+  | "nonpayable" ->
+    Nonpayable
+  | "payable" ->
+    Payable
+  | _ ->
+    failwith ("abi_mutability_from_string: incorrect mutability type "^str)
+
+let abi_type_from_json (json_type : Json.json) =
+  match json_type with
+  | `String s ->
+    (match s with
+     | "uint256" -> SolidityTypes.Tuint { w = 256 }
+     | "int256 " -> SolidityTypes.Tint { w = 256 }
+     | _ ->
+       failwith ("abi_type_from_json: can't decode "^s)
+    )
+  | _ ->
+    let dump = Json.to_string json_type in
+    failwith ("abi_type_from_json: can't decode "^dump)
+
+let abi_signature_from_json json =
+  let json_args = Json.drop_list json in
+  ListLabels.map json_args ~f:(fun argument ->
+      let fields = Json.drop_assoc argument in
+      let arg_name = List.assoc "name" fields |> Json.drop_string in
+      let arg_type = List.assoc "type" fields |> abi_type_from_json in
+      { arg_name; arg_type }
+    )
+
+let abi_from_json json =
+  ListLabels.map (Json.drop_list json) ~f:(fun method_abi ->
+      let fields = Json.drop_assoc method_abi in
+      let m_name     = List.assoc "name" fields |> Json.drop_string in
+      let m_constant = List.assoc "constant" fields |> Json.drop_bool in
+      let m_inputs   = List.assoc "inputs" fields |> abi_signature_from_json in
+      let m_outputs  = List.assoc "outputs" fields |> abi_signature_from_json in
+      let m_payable  = List.assoc "payable" fields |> Json.drop_bool in
+      let m_mutability = List.assoc "stateMutability" fields |> Json.drop_string |> abi_mutability_from_string in
+      let m_type = List.assoc "type" fields |> abi_method_type_from_json in
+      {
+        m_name; m_constant; m_inputs; m_outputs; m_payable; m_mutability; m_type
+      }
+    )
+
+let compile_solidity ~filename =
+  let result  = Json.from_string (exec_and_get_stdout "solc" [| "solc"; "--optimize"; "--combined-json"; "abi,bin,interface"; filename |]) in
+  let fields  = Json.drop_assoc result in
+  let version = List.assoc "version" fields |> Json.drop_string in
+  let contracts = List.assoc "contracts" fields |> Json.drop_assoc in
+  let contracts =
+    List.map (fun (contract_name, contract_contents) ->
+        let contents = Json.drop_assoc contract_contents in
+        let bin = List.assoc "bin" contents |> Json.drop_string in
+        let abi = List.assoc "abi" contents |> Json.drop_string |> Json.from_string |> abi_from_json in
+        { contract_name; bin; abi }
+      ) contracts
+  in
+  { version; contracts }
+
+

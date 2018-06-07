@@ -20,7 +20,6 @@ val hash512_from_string : string -> hash512
 type wei      = int
 type block_id = int
 
-
 type transaction =
   {
     src : address;
@@ -91,8 +90,8 @@ type peer =
 
 type peer_info = peer list
 
-val transaction_to_json : transaction -> Yojson.Basic.json
-val receipt_from_json : Yojson.Basic.json -> transaction_receipt option
-val node_info_from_json : Yojson.Basic.json -> node_info option
-val peer_info_from_json : Yojson.Basic.json -> peer_info
+val transaction_to_json : transaction -> Json.json
+val receipt_from_json : Json.json -> transaction_receipt option
+val node_info_from_json : Json.json -> node_info option
+val peer_info_from_json : Json.json -> peer_info
 
