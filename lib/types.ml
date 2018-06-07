@@ -269,8 +269,9 @@ let peer_from_json : Json.json -> peer option =
     | `Assoc fields ->
       let caps = assoc "caps" fields |> Json.drop_string_list in
       let id   = assoc "id" fields
-               |> Json.drop_string
-               |> hash512_from_string
+                 |> Json.drop_string
+                 |> (fun x -> "0x"^x) (* HACK: for some reason geth does not prefix the hash with 0x. *)                      
+                 |> hash512_from_string
       in
       let name = assoc "name" fields |> Json.drop_string in
       let network =
