@@ -1,5 +1,4 @@
-(* The EVM bytecodes "bytes" are in fact 256 bit (32 bytes) long, to facilitate SHA3 based
-   operations. *)
+open Batteries
 
 (* A literal is an hexadecimal string, without 0x prefix, of length at most 32 bytes and at least 1 byte (2 hex digits) *)
 type literal = string
@@ -160,8 +159,166 @@ type instr_code =
 type code =
   | Instr of instr_code
   | Literal of literal
+  | MissingOpcode of char
 
 type bytecode = code list
+
+exception WrongOpcode of char
+
+let codeop (c : char) =
+  match c with
+  | '\x00' -> STOP
+  | '\x01' -> ADD
+  | '\x02' -> MUL
+  | '\x03' -> SUB
+  | '\x04' -> DIV
+  | '\x05' -> SDIV
+  | '\x06' -> MOD
+  | '\x07' -> SMOD
+  | '\x08' -> ADDMOD
+  | '\x09' -> MULMOD
+  | '\x0a' -> EXP
+  | '\x0b' -> SIGNEXTEND
+  | '\x10' -> LT
+  | '\x11' -> GT
+  | '\x12' -> SLT
+  | '\x13' -> SGT
+  | '\x14' -> EQ
+  | '\x15' -> ISZERO
+  | '\x16' -> AND
+  | '\x17' -> OR
+  | '\x18' -> XOR
+  | '\x19' -> NOT
+  | '\x1a' -> BYTE
+  | '\x20' -> SHA3
+  | '\x30' -> ADDRESS
+  | '\x31' -> BALANCE
+  | '\x32' -> ORIGIN
+  | '\x33' -> CALLER
+  | '\x34' -> CALLVALUE
+  | '\x35' -> CALLDATALOAD
+  | '\x36' -> CALLDATASIZE
+  | '\x37' -> CALLDATACOPY
+  | '\x38' -> CODESIZE
+  | '\x39' -> CODECOPY
+  | '\x3a' -> GASPRICE
+  | '\x3b' -> EXTCODESIZE
+  | '\x3c' -> EXTCODECOPY
+  | '\x3d' -> RETURNDATASIZE
+  | '\x3e' -> RETURNDATACOPY
+  | '\x40' -> BLOCKHASH
+  | '\x41' -> COINBASE
+  | '\x42' -> TIMESTAMP
+  | '\x43' -> NUMBER
+  | '\x44' -> DIFFICULTY
+  | '\x45' -> GASLIMIT
+  | '\x50' -> POP
+  | '\x51' -> MLOAD
+  | '\x52' -> MSTORE
+  | '\x53' -> MSTORE8
+  | '\x54' -> SLOAD
+  | '\x55' -> SSTORE
+  | '\x56' -> JUMP
+  | '\x57' -> JUMPI
+  | '\x58' -> GETPC
+  | '\x59' -> MSIZE
+  | '\x5a' -> GAS
+  | '\x5b' -> JUMPDEST
+  | '\x60' -> PUSH1
+  | '\x61' -> PUSH2
+  | '\x62' -> PUSH3
+  | '\x63' -> PUSH4
+  | '\x64' -> PUSH5
+  | '\x65' -> PUSH6
+  | '\x66' -> PUSH7
+  | '\x67' -> PUSH8
+  | '\x68' -> PUSH9
+  | '\x69' -> PUSH10
+  | '\x6a' -> PUSH11
+  | '\x6b' -> PUSH12
+  | '\x6c' -> PUSH13
+  | '\x6d' -> PUSH14
+  | '\x6e' -> PUSH15
+  | '\x6f' -> PUSH16
+  | '\x70' -> PUSH17
+  | '\x71' -> PUSH18
+  | '\x72' -> PUSH19
+  | '\x73' -> PUSH20
+  | '\x74' -> PUSH21
+  | '\x75' -> PUSH22
+  | '\x76' -> PUSH23
+  | '\x77' -> PUSH24
+  | '\x78' -> PUSH25
+  | '\x79' -> PUSH26
+  | '\x7a' -> PUSH27
+  | '\x7b' -> PUSH28
+  | '\x7c' -> PUSH29
+  | '\x7d' -> PUSH30
+  | '\x7e' -> PUSH31
+  | '\x7f' -> PUSH32
+  | '\x80' -> DUP1
+  | '\x81' -> DUP2
+  | '\x82' -> DUP3
+  | '\x83' -> DUP4
+  | '\x84' -> DUP5
+  | '\x85' -> DUP6
+  | '\x86' -> DUP7
+  | '\x87' -> DUP8
+  | '\x88' -> DUP9
+  | '\x89' -> DUP10
+  | '\x8a' -> DUP11
+  | '\x8b' -> DUP12
+  | '\x8c' -> DUP13
+  | '\x8d' -> DUP14
+  | '\x8e' -> DUP15
+  | '\x8f' -> DUP16
+  | '\x90' -> SWAP1
+  | '\x91' -> SWAP2
+  | '\x92' -> SWAP3
+  | '\x93' -> SWAP4
+  | '\x94' -> SWAP5
+  | '\x95' -> SWAP6
+  | '\x96' -> SWAP7
+  | '\x97' -> SWAP8
+  | '\x98' -> SWAP9
+  | '\x99' -> SWAP10
+  | '\x9a' -> SWAP11
+  | '\x9b' -> SWAP12
+  | '\x9c' -> SWAP13
+  | '\x9d' -> SWAP14
+  | '\x9e' -> SWAP15
+  | '\x9f' -> SWAP16
+  | '\xa0' -> LOG0
+  | '\xa1' -> LOG1
+  | '\xa2' -> LOG2
+  | '\xa3' -> LOG3
+  | '\xa4' -> LOG4
+  | '\xb0' -> JUMPTO
+  | '\xb1' -> JUMPIF
+  | '\xb2' -> JUMPSUB
+  | '\xb4' -> JUMPSUBV
+  | '\xb5' -> BEGINSUB
+  | '\xb6' -> BEGINDATA
+  | '\xb8' -> RETURNSUB
+  | '\xb9' -> PUTLOCAL
+  | '\xba' -> GETLOCAL
+  | '\xe1' -> SLOADBYTES
+  | '\xe2' -> SSTOREBYTES
+  | '\xe3' -> SSIZE
+  | '\xf0' -> CREATE
+  | '\xf1' -> CALL
+  | '\xf2' -> CALLCODE
+  | '\xf3' -> RETURN
+  | '\xf4' -> DELEGATECALL
+  | '\xf5' -> CALLBLACKBOX
+  | '\xfa' -> STATICCALL
+  | '\xfb' -> CREATE2
+  | '\xfc' -> TXEXECGAS
+  | '\xfd' -> REVERT
+  | '\xfe' -> INVALID
+  | '\xff' -> SELFDESTRUCT
+  | _      ->
+    raise (WrongOpcode c)
 
 let opcode = function
   | STOP ->  0x00
@@ -373,7 +530,63 @@ struct
     | 16 -> DUP16
     | _ ->
       failwith "invalid dup depth"
-  
+
+  let pushdepth = function
+    | PUSH1 -> 01
+    | PUSH2 -> 02
+    | PUSH3 -> 03
+    | PUSH4 -> 04
+    | PUSH5 -> 05
+    | PUSH6 -> 06
+    | PUSH7 -> 07
+    | PUSH8 -> 08
+    | PUSH9 -> 09
+    | PUSH10 -> 10
+    | PUSH11 -> 11
+    | PUSH12 -> 12
+    | PUSH13 -> 13
+    | PUSH14 -> 14
+    | PUSH15 -> 15
+    | PUSH16 -> 16
+    | PUSH17 -> 17
+    | PUSH18 -> 18
+    | PUSH19 -> 19
+    | PUSH20 -> 20
+    | PUSH21 -> 21
+    | PUSH22 -> 22
+    | PUSH23 -> 23
+    | PUSH24 -> 24
+    | PUSH25 -> 25
+    | PUSH26 -> 26
+    | PUSH27 -> 27
+    | PUSH28 -> 28
+    | PUSH29 -> 29
+    | PUSH30 -> 30
+    | PUSH31 -> 31
+    | PUSH32 -> 32
+    | _ ->
+      failwith "instruction not a PUSHn"
+
+  let dupdepth = function
+    | DUP1 -> 01
+    | DUP2 -> 02
+    | DUP3 -> 03
+    | DUP4 -> 04
+    | DUP5 -> 05
+    | DUP6 -> 06
+    | DUP7 -> 07
+    | DUP8 -> 08
+    | DUP9 -> 09
+    | DUP10 -> 10
+    | DUP11 -> 11
+    | DUP12 -> 12
+    | DUP13 -> 13
+    | DUP14 -> 14
+    | DUP15 -> 15
+    | DUP16 -> 16
+    | _ ->
+      failwith "instruction not a DUPn"
+
 end
 
 let literal_of_int i =
@@ -392,13 +605,17 @@ let string_opcode x =
 let string_of_bytecode = function
   | Instr code  -> string_opcode code
   | Literal lit -> lit
+  | MissingOpcode c ->
+    let code = Char.code c in
+    Printf.sprintf "%.2x" code
 
 let length program =
   let rec length (program : bytecode) acc =
     match program with
     | [] -> acc
+    | (MissingOpcode _) :: tail
     | (Instr _) :: tail   -> length tail (acc + 1)
-    | (Literal l) :: tail -> length tail (acc + (String.length l) / 2)
+    | (Literal l) :: tail -> length tail (acc + (String.length l) / 2) (* we need a "byte length of literal" function*)
   in
   length program 0
 
@@ -465,6 +682,34 @@ let deploy (program : bytecode) =
     ]
   in
   deploy_code @ program
+
+
+
+let parse_hexstring str =
+  if not (Tools.string_is_hex str) then
+    failwith "Evm.parse_hexstring: string is not 0x-prefixed hex string";
+  let stripped   = String.tail str 2 in
+  let compressed = Hex.to_string (`Hex stripped) in
+  let rec loop bc acc =
+    match bc with
+    | [] -> List.rev acc
+    | (('\x60' .. '\x7f') as code) :: tl -> (* push *)
+      let code  = codeop code in
+      (* could do a subtraction, but lets minimize functionalities *)
+      let depth = Ops.pushdepth code in
+      let taken, rest = List.takedrop depth tl in
+      let lit   = String.of_list taken in
+      let `Hex lit = Hex.of_string lit in
+      loop rest ((Literal lit) :: (Instr code) :: acc)
+    | code :: tail ->
+      let result = try Instr (codeop code) with
+        | WrongOpcode _ -> MissingOpcode code
+      in
+      loop tail (result :: acc)
+  in
+  loop (String.explode compressed) []
+
+    
 
 
 (* let deploy (program : bytecode) =

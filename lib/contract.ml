@@ -235,7 +235,7 @@ struct
 
 end
 
-module SolidityContract =
+module Compile =
 struct
 
 
@@ -289,7 +289,7 @@ struct
     end
 
 
-  let compile_solidity ~filename =
+  let to_json ~filename =
     let result  = Json.from_string (exec_and_get_stdout "solc" [| "solc"; "--optimize"; "--combined-json"; "abi,bin,interface"; filename |]) in
     let fields  = Json.drop_assoc result in
     let version = List.assoc "version" fields |> Json.drop_string in

@@ -156,6 +156,7 @@ type instr_code =
 type code =
   | Instr of instr_code
   | Literal of literal
+  | MissingOpcode of char
 
 type bytecode = code list
 
@@ -164,6 +165,8 @@ sig
   val push : int -> instr_code
   val dup : int -> instr_code    
 end
+
+val parse_hexstring : string -> bytecode
 
 val literal_of_int : int -> literal
 

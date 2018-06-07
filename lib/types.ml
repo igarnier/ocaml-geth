@@ -5,27 +5,11 @@ type hash256 = string
 type hash512 = string
   
     
-let char_is_hex = function
-  | '0' .. '9'
-  | 'A' .. 'F'
-  | 'a' .. 'f' -> true
-  | _ -> false
-
-let string_is_hex x =
-  let rec loop i len x acc =
-    if i = len then
-      acc
-    else
-      loop (i+1) len x (acc && char_is_hex x.[i])
-  in
-  x.[0] = '0'
-  && (x.[1] = 'x' || x.[1] = 'X')
-  && (loop 2 (String.length x) x true)
 
 let address_to_string x = x
 
 let address_from_string x =
-  if String.length x != 42 || not (string_is_hex x) then
+  if String.length x != 42 || not (Tools.string_is_hex x) then
     failwith "address_from_string: input must be 20 bytes (40 hex chars) 0x-prefixed"
   else
     x
@@ -33,7 +17,7 @@ let address_from_string x =
 let hash256_to_string x = x
   
 let hash256_from_string x =
-  if String.length x != 66 || not (string_is_hex x) then
+  if String.length x != 66 || not (Tools.string_is_hex x) then
     failwith "hash256_from_string: input must be 32 bytes (64 hex chars) 0x-prefixed"
   else
     x
@@ -42,7 +26,7 @@ let hash512_to_string x = x
   
 let hash512_from_string x =
   let len = String.length x in
-  if len != 130 || not (string_is_hex x) then
+  if len != 130 || not (Tools.string_is_hex x) then
     let open Printf in
     let msg = sprintf "hash512_from_string: input must be 64 bytes (128 hex chars) 0x-prefixed.\
  Got %s, length %d instead." x len in
@@ -94,7 +78,7 @@ type protocol_info =
     difficulty : Z.t;
     genesis    : hash256 option;
     head       : hash256;
-    network    : int
+    network    : int option
   }
 
 type node_info =
@@ -213,13 +197,16 @@ let protocol_info_from_json : Json.json -> protocol_info option =
         try Some (assoc "genesis" fields
                   |> Json.drop_string
                   |> hash256_from_string)
-        with Not_found -> None
+        with _ -> None
       in
       let head = assoc "head" fields
                  |> Json.drop_string
                  |> hash256_from_string
       in
-      let network = assoc "network" fields |> Json.drop_int in
+      let network =
+        try Some (assoc "network" fields |> Json.drop_int)
+        with _ -> None
+      in
       Some (Eth { difficulty; genesis; head; network })
     | _ ->
       None

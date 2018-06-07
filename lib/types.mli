@@ -59,7 +59,7 @@ type protocol_info =
       difficulty : Z.t;
       genesis    : hash256 option;
       head       : hash256;
-      network    : int
+      network    : int option
     }
 
 type node_info =
