@@ -3,4 +3,6 @@
 (library
  ((name        mlparity)
   (public_name mlparity)
-  (libraries (batteries yojson netclient ssh-client cryptokit zarith hex))))
+  (libraries (batteries yojson netclient ssh-client cryptokit zarith bitstring hex))
+  (preprocess (pps (bitstring.ppx)))
+))

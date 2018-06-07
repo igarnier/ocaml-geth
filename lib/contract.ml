@@ -8,7 +8,7 @@ struct
 
   type bitwidth = int (* mod 8 = 0, 0 < bitwidth <= 256*)
 
-  type t =
+  type atomic =
     | Tuint of { w : bitwidth }
     | Tint of { w : bitwidth }
     | Taddress
@@ -17,14 +17,23 @@ struct
     | Tfixed of { m : bitwidth; n : bitwidth }
     | Tufixed of { m : bitwidth; n : bitwidth }
     | Tbytes of { nbytes : int } (* 0 < #nbytes <= 32 *)
+
+  and t =
+    | Tatomic of atomic
     | Tfunction
     | Tstatic_array of { numel : int; typ : t }
     (* | Tdynamic_array of { typ : t } *)
+
 
 end
 
 module ABI =
 struct
+
+  type value =
+    | Int    of int64
+    | Bool   of bool
+    | String of string
 
   type method_abi =
     {
@@ -58,16 +67,19 @@ struct
 
   open Printf
 
-  let rec encoding_of_type =
+  let rec encoding_of_type t =
     let open SolidityTypes in
-    function
-    | Tuint { w } -> sprintf "uint%d" w
-    | Tint { w }  -> sprintf "int%d" w
-    | Taddress    -> "address"
-    | Tbool       -> "bool"
-    | Tfixed { m; n }   -> sprintf "fixed%dx%d" m n
-    | Tufixed { m; n }  -> sprintf "ufixed%dx%d" m n
-    | Tbytes { nbytes } -> sprintf "bytes%d" nbytes
+    match t with
+    | Tatomic atomic ->
+      (match atomic with
+       | Tuint { w } -> sprintf "uint%d" w
+       | Tint { w }  -> sprintf "int%d" w
+       | Taddress    -> "address"
+       | Tbool       -> "bool"
+       | Tfixed { m; n }   -> sprintf "fixed%dx%d" m n
+       | Tufixed { m; n }  -> sprintf "ufixed%dx%d" m n
+       | Tbytes { nbytes } -> sprintf "bytes%d" nbytes
+      )
     | Tfunction         -> "bytes24"
     | Tstatic_array { numel; typ } ->
       sprintf "%s[%d]" (encoding_of_type typ) numel
@@ -100,20 +112,58 @@ struct
   let zero_bitstring nbytes =
     Bitstring.zeroes_bitstring (nbytes * 8)
 
+  let one_bitstring nbytes =
+    Bitstring.ones_bitstring (nbytes * 8)
+
+  
   (* Encoding of values *)
-  let encode_int (i : int64) (t : SolidityTypes.t) =
+  let encode_int (i : int64) (t : SolidityTypes.atomic) =
     match t with
-    | Taddress | Tfunction | Tstatic_array _ ->
-      failwith "Contract.ABI.encode: wrong type for integer value"
     | Tuint { w } ->
       if i < 0L then
         failwith "Contract.ABI.encode: cannot encode negative integer as unsigned int"
       else
         Bitstring.concat [zero_bitstring 24; int64_to_bitstring i]
     | Tint { w } ->
-      Bitstring.concat [zero_bitstring 24; int64_to_bitstring i]
+      if i < 0L then
+        Bitstring.concat [one_bitstring 24; int64_to_bitstring i]
+      else
+        Bitstring.concat [zero_bitstring 24; int64_to_bitstring i]
     | _ ->
       failwith "encode_int: incompatible Solidity type"
+
+  let compress_string (hex_string : string) =
+    let stripped   = String.tail hex_string 2 in
+    let compressed = Hex.to_string (`Hex stripped) in
+    Bitstring.bitstring_of_string compressed
+
+  let encode_value (v : value) (t : SolidityTypes.t) =
+    let open SolidityTypes in
+    match v with
+    | Int i ->
+      (match t with
+       | Tatomic atomic ->
+           encode_int i atomic
+       | _ ->
+         failwith "encode_value: type mismatch (bool)"
+      )
+    | Bool b ->
+      (match t with
+       | Tatomic Tbool ->
+         encode_int 1L (Tuint { w = 32 })
+       | _ ->
+         failwith "encode_value: type mismatch (bool)")
+    | String s ->
+      (match t with
+       | Tatomic Taddress -> (* 160 bits *)
+         let encoded = compress_string s in
+         let zeroes  = Bitstring.zeroes_bitstring (256 - 160) in
+         Bitstring.concat [zeroes; encoded]
+       | _ ->
+         failwith "encode_value: type mismatch (string)")
+      
+  (* let encode_address (a : Types.address) =
+   *   Bitstring. *)
 
   (* -------------------------------------------------------------------------------- *)
   (* Deserialization of ABIs from solc --json output *)
@@ -149,8 +199,8 @@ struct
     match json_type with
     | `String s ->
       (match s with
-       | "uint256" -> SolidityTypes.Tuint { w = 256 }
-       | "int256 " -> SolidityTypes.Tint { w = 256 }
+       | "uint256" -> SolidityTypes.(Tatomic (Tuint { w = 256 }))
+       | "int256 " -> SolidityTypes.(Tatomic (Tint { w = 256 }))
        | _ ->
          failwith ("type_from_json: can't decode "^s)
       )
