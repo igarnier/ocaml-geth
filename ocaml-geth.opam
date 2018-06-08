@@ -1,9 +1,9 @@
 opam-version: "1.2"
 maintainer: "ilias.gar@gmail.com"
 authors: ["Ilias Garnier"]
-homepage: "https://github.com/igarnier/TODO"
-bug-reports: "https://github.com/igarnier/TODO"
-dev-repo: "git+https://github.com/igarnier/TODO"
+homepage: "https://github.com/igarnier/ocaml-geth"
+bug-reports: "https://github.com/igarnier/ocaml-geth"
+dev-repo: "git+https://github.com/igarnier/ocaml-geth"
 license: "MIT"
 build: [
   ["jbuilder" "build" "-p" name "-j" jobs]
@@ -13,8 +13,12 @@ depends: [
   "yojson"
   "batteries"
   "netclient"
+  "ssh-client"
+  "cryptokit"
+  "zarith"
+  "hex"
 ]
 available: [ ocaml-version >= "4.04.1" ]
 descr: "
-An OCaml overlay over parity's RPC interface.
+An OCaml overlay over the Go-Ethereum (geth) client.
 "

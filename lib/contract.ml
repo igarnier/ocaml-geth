@@ -96,26 +96,12 @@ struct
 
   let method_id method_abi =
     let hash = Cryptokit.Hash.keccak 256 in
-    Cryptokit.hash_string hash (string_of_signature method_abi)
+    let resl = Cryptokit.hash_string hash (string_of_signature method_abi) in
+    let head = String.head resl 2 in
+    Bitstr.bits_of_string head
 
   (* -------------------------------------------------------------------------------- *)
-  open Bitstring
-      
-  let int64_to_bitstring (i : int64) =
-    let%bitstring result =
-    {|
-      i : 64
-    |}
-    in
-    result
 
-  let zero_bitstring nbytes =
-    Bitstring.zeroes_bitstring (nbytes * 8)
-
-  let one_bitstring nbytes =
-    Bitstring.ones_bitstring (nbytes * 8)
-
-  
   (* Encoding of values *)
   let encode_int (i : int64) (t : SolidityTypes.atomic) =
     match t with
@@ -123,20 +109,15 @@ struct
       if i < 0L then
         failwith "Contract.ABI.encode: cannot encode negative integer as unsigned int"
       else
-        Bitstring.concat [zero_bitstring 24; int64_to_bitstring i]
+        Bitstr.(zero_pad_to ~bits:(bits_of_int64 i) ~target_bits:256)
     | Tint { w } ->
       if i < 0L then
-        Bitstring.concat [one_bitstring 24; int64_to_bitstring i]
+        Bitstr.(one_pad_to ~bits:(bits_of_int64 i) ~target_bits:256)
       else
-        Bitstring.concat [zero_bitstring 24; int64_to_bitstring i]
+        Bitstr.(zero_pad_to ~bits:(bits_of_int64 i) ~target_bits:256)
     | _ ->
       failwith "encode_int: incompatible Solidity type"
-
-  let compress_string (hex_string : string) =
-    let stripped   = String.tail hex_string 2 in
-    let compressed = Hex.to_string (`Hex stripped) in
-    Bitstring.bitstring_of_string compressed
-
+    
   let encode_value (v : value) (t : SolidityTypes.t) =
     let open SolidityTypes in
     match v with
@@ -156,19 +137,15 @@ struct
     | String s ->
       (match t with
        | Tatomic Taddress -> (* 160 bits *)
-         let encoded = compress_string s in
-         let zeroes  = Bitstring.zeroes_bitstring (256 - 160) in
-         Bitstring.concat [zeroes; encoded]
+         let encoded = Bitstr.compress (Bitstr.hex_of_string s) in
+         Bitstr.zero_pad_to ~bits:encoded ~target_bits:256
        | _ ->
          failwith "encode_value: type mismatch (string)")
-      
-  (* let encode_address (a : Types.address) =
-   *   Bitstring. *)
 
   (* -------------------------------------------------------------------------------- *)
   (* Deserialization of ABIs from solc --json output *)
 
-  let method_type_from_json mtype =
+  let method_type_of_json mtype =
     match mtype with
     | `String mtype ->
       (match mtype with
@@ -176,13 +153,13 @@ struct
        | "constructor" -> Constructor
        | "callback" -> Callback
        | _ ->
-         failwith ("method_type_from_json: incorrect method type "^mtype)       
+         failwith ("method_type_of_json: incorrect method type "^mtype)       
       )
     | _ ->
       let dump = Json.to_string mtype in
-      failwith ("type_from_json: can't decode "^dump)
+      failwith ("type_of_json: can't decode "^dump)
 
-  let mutability_from_string str =
+  let mutability_of_string str =
     match str with
     | "pure" ->
       Pure
@@ -193,27 +170,27 @@ struct
     | "payable" ->
       Payable
     | _ ->
-      failwith ("mutability_from_string: incorrect mutability type "^str)
+      failwith ("mutability_of_string: incorrect mutability type "^str)
 
-  let type_from_json (json_type : Json.json) =
+  let type_of_json (json_type : Json.json) =
     match json_type with
     | `String s ->
       (match s with
        | "uint256" -> SolidityTypes.(Tatomic (Tuint { w = 256 }))
        | "int256 " -> SolidityTypes.(Tatomic (Tint { w = 256 }))
        | _ ->
-         failwith ("type_from_json: can't decode "^s)
+         failwith ("type_of_json: can't decode "^s)
       )
     | _ ->
       let dump = Json.to_string json_type in
-      failwith ("type_from_json: can't decode "^dump)
+      failwith ("type_of_json: can't decode "^dump)
 
-  let signature_from_json json =
+  let signature_of_json json =
     let json_args = Json.drop_list json in
     ListLabels.map json_args ~f:(fun argument ->
         let fields = Json.drop_assoc argument in
         let arg_name = List.assoc "name" fields |> Json.drop_string in
-        let arg_type = List.assoc "type" fields |> type_from_json in
+        let arg_type = List.assoc "type" fields |> type_of_json in
         { arg_name; arg_type }
       )
 
@@ -222,22 +199,20 @@ struct
         let fields = Json.drop_assoc method_abi in
         let m_name     = List.assoc "name" fields |> Json.drop_string in
         let m_constant = List.assoc "constant" fields |> Json.drop_bool in
-        let m_inputs   = List.assoc "inputs" fields |> signature_from_json in
-        let m_outputs  = List.assoc "outputs" fields |> signature_from_json in
+        let m_inputs   = List.assoc "inputs" fields |> signature_of_json in
+        let m_outputs  = List.assoc "outputs" fields |> signature_of_json in
         let m_payable  = List.assoc "payable" fields |> Json.drop_bool in
-        let m_mutability = List.assoc "stateMutability" fields |> Json.drop_string |> mutability_from_string in
-        let m_type = List.assoc "type" fields |> method_type_from_json in
+        let m_mutability = List.assoc "stateMutability" fields |> Json.drop_string |> mutability_of_string in
+        let m_type = List.assoc "type" fields |> method_type_of_json in
         {
           m_name; m_constant; m_inputs; m_outputs; m_payable; m_mutability; m_type
         }
       )
 
-
 end
 
 module Compile =
 struct
-
 
   type solidity_output =
     {
@@ -251,7 +226,6 @@ struct
       bin           : string;
       abi           : ABI.method_abi list;
     }
-
 
   let exec_and_get_stdout command args =
     let output, input = Unix.pipe () in  
@@ -288,7 +262,6 @@ struct
         failwith m          
     end
 
-
   let to_json ~filename =
     let result  = Json.from_string (exec_and_get_stdout "solc" [| "solc"; "--optimize"; "--combined-json"; "abi,bin,interface"; filename |]) in
     let fields  = Json.drop_assoc result in
@@ -304,23 +277,59 @@ struct
     in
     { version; contracts }
 
+  let deploy_rpc : uri:string -> account:Types.address -> passphrase:string -> gas:int -> contract:solidity_output -> Types.hash256 =
+    fun ~uri ~account ~passphrase ~gas ~contract ->
+      match contract.contracts with
+      | [ ctx ] ->
+        let bytecode =
+          "0x"^ctx.bin
+          |> Evm.parse_hexstring
+          |> Evm.deploy
+          |> Evm.dump
+        in
+        let open Types in
+        let transaction =
+          {
+            src = account;
+            dst = None;
+            gas = Some 100000;
+            gas_price = None; (* there is a sensible default *)
+            value = None;
+            data = bytecode;
+            nonce = None
+          }
+        in
+        if Rpc.Personal.unlock_account ~uri ~account ~passphrase ~unlock_duration:300 then
+          Rpc.Eth.send_transaction ~uri ~transaction
+        else
+          failwith "deploy_rpc: could not unlock account"
+      | _ ->
+        failwith "deploy_rpc: more than one contract in solidity_output"
+
+  let call_method ~(abi : ABI.method_abi) ~(args : ABI.value list) ~(uri : string) ~(src : Types.address) ~(ctx : Types.address) ~(gas : int) =
+      let mname = abi.m_name in
+      let inputs = abi.ABI.m_inputs in
+      let siglen = List.length inputs in
+      let arglen = List.length args in
+      if siglen = arglen then
+        let method_id = ABI.method_id abi in
+        let args      =
+          List.map2 (fun value { ABI.arg_type } ->
+              ABI.encode_value value arg_type
+            ) args inputs
+        in
+        let bitstring = Bitstr.concat (method_id :: args) in
+        let data = Bitstr.(hex_as_string (uncompress bitstring)) in
+        let transaction =
+          {
+            Types.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
+          }
+        in
+        Rpc.Eth.call ~uri ~transaction ~at_time:`latest
+      else
+        let m = Printf.sprintf
+            "call_method: # of arguments mismatch for method %s: %d expected vs %d actual\n" mname siglen arglen
+        in
+        failwith m
+         
 end
-
-
-type value =
-  | Int of int
-  | Bool of bool
-  | Addr of Types.address
-
-
-(* Function description: [method_abi]. *)
-
-(*
-"Constructor and Callback function never have name or outputs. 
- Callback function doesn’t have inputs either.
- Sending non-zero ether to non-payable function will throw. Don’t do it."
-*)
-
-
-
-

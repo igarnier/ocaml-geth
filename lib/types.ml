@@ -3,13 +3,11 @@ open Batteries
 type address = string
 type hash256 = string
 type hash512 = string
-  
-    
 
 let address_to_string x = x
 
 let address_from_string x =
-  if String.length x != 42 || not (Tools.string_is_hex x) then
+  if String.length x != 42 || not (Bitstr.string_is_hex x) then
     failwith "address_from_string: input must be 20 bytes (40 hex chars) 0x-prefixed"
   else
     x
@@ -17,7 +15,7 @@ let address_from_string x =
 let hash256_to_string x = x
   
 let hash256_from_string x =
-  if String.length x != 66 || not (Tools.string_is_hex x) then
+  if String.length x != 66 || not (Bitstr.string_is_hex x) then
     failwith "hash256_from_string: input must be 32 bytes (64 hex chars) 0x-prefixed"
   else
     x
@@ -26,7 +24,7 @@ let hash512_to_string x = x
   
 let hash512_from_string x =
   let len = String.length x in
-  if len != 130 || not (Tools.string_is_hex x) then
+  if len != 130 || not (Bitstr.string_is_hex x) then
     let open Printf in
     let msg = sprintf "hash512_from_string: input must be 64 bytes (128 hex chars) 0x-prefixed.\
  Got %s, length %d instead." x len in

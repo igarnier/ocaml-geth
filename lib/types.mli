@@ -1,4 +1,5 @@
 (** Addresses are 20 bytes long, 40 bytes in hex form + 0x. *)
+(* TODO: use Bitstr.hex_string *)
 type address = private string
 
 (** hash256 are 32 bytes long, 64 bytes in hex form + 0x. *)

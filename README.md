@@ -1,4 +1,8 @@
+A library to interact with Ethereum blockchains.
 
-For now, this is just a bunch of scripts to deploy a private Ethereum blockchain through ssh.
+For now, the library contains:
+1) bindings to the Geth RPC interface (via http)
+2) scripts to deploy geth nodes via ssh
+3) some ongoing work on building an ASM on top the bytecode that is more easily manipulated programmatically.
 
-Warning: do /not/ use OPAM's version of libssh-ocaml, it is completely unusable. You will have to use my fork, at github/igarnier
+Depends on ssh-client (not in OPAM) among other things.

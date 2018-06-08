@@ -1,8 +1,8 @@
 (jbuild_version 1)
 
 (library
- ((name        mlparity)
-  (public_name mlparity)
-  (libraries (batteries yojson netclient ssh-client cryptokit zarith bitstring hex))
+ ((name        ocaml_geth)
+  (public_name ocaml-geth)
+  (libraries (batteries yojson netclient ssh-client cryptokit zarith hex))
   (preprocess (pps (bitstring.ppx)))
 ))

@@ -531,61 +531,19 @@ struct
     | _ ->
       failwith "invalid dup depth"
 
-  let pushdepth = function
-    | PUSH1 -> 01
-    | PUSH2 -> 02
-    | PUSH3 -> 03
-    | PUSH4 -> 04
-    | PUSH5 -> 05
-    | PUSH6 -> 06
-    | PUSH7 -> 07
-    | PUSH8 -> 08
-    | PUSH9 -> 09
-    | PUSH10 -> 10
-    | PUSH11 -> 11
-    | PUSH12 -> 12
-    | PUSH13 -> 13
-    | PUSH14 -> 14
-    | PUSH15 -> 15
-    | PUSH16 -> 16
-    | PUSH17 -> 17
-    | PUSH18 -> 18
-    | PUSH19 -> 19
-    | PUSH20 -> 20
-    | PUSH21 -> 21
-    | PUSH22 -> 22
-    | PUSH23 -> 23
-    | PUSH24 -> 24
-    | PUSH25 -> 25
-    | PUSH26 -> 26
-    | PUSH27 -> 27
-    | PUSH28 -> 28
-    | PUSH29 -> 29
-    | PUSH30 -> 30
-    | PUSH31 -> 31
-    | PUSH32 -> 32
-    | _ ->
+  let pushdepth x =
+    let c = opcode x in
+    if 0x60 <= c && c <= 0x7f then
+      c - 0x60 + 1
+    else
       failwith "instruction not a PUSHn"
 
-  let dupdepth = function
-    | DUP1 -> 01
-    | DUP2 -> 02
-    | DUP3 -> 03
-    | DUP4 -> 04
-    | DUP5 -> 05
-    | DUP6 -> 06
-    | DUP7 -> 07
-    | DUP8 -> 08
-    | DUP9 -> 09
-    | DUP10 -> 10
-    | DUP11 -> 11
-    | DUP12 -> 12
-    | DUP13 -> 13
-    | DUP14 -> 14
-    | DUP15 -> 15
-    | DUP16 -> 16
-    | _ ->
-      failwith "instruction not a DUPn"
+  let dupdepth x =
+    let c = opcode x in
+    if 0x80 <= c && c <= 0x8f then
+      c - 0x80 + 1
+    else
+      failwith "instruction not a PUSHn"
 
 end
 
@@ -684,9 +642,8 @@ let deploy (program : bytecode) =
   deploy_code @ program
 
 
-
 let parse_hexstring str =
-  if not (Tools.string_is_hex str) then
+  if not (Bitstr.string_is_hex str) then
     failwith "Evm.parse_hexstring: string is not 0x-prefixed hex string";
   let stripped   = String.tail str 2 in
   let compressed = Hex.to_string (`Hex stripped) in
@@ -695,7 +652,6 @@ let parse_hexstring str =
     | [] -> List.rev acc
     | (('\x60' .. '\x7f') as code) :: tl -> (* push *)
       let code  = codeop code in
-      (* could do a subtraction, but lets minimize functionalities *)
       let depth = Ops.pushdepth code in
       let taken, rest = List.takedrop depth tl in
       let lit   = String.of_list taken in
