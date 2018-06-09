@@ -1,0 +1,9 @@
+(jbuild_version 1)
+
+(executable
+  (
+  (name storage)
+  (ocamlopt_flags (-O3))
+  (libraries (batteries ocaml-geth))
+  )
+)

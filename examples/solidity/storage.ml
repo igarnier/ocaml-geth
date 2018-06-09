@@ -1,7 +1,6 @@
 open Ocaml_geth
 open Contract
 
-
 (* --------------------------------------------------------------------- *)
 (* Deploying a smart contract *)
 (* --------------------------------------------------------------------- *)
@@ -96,19 +95,37 @@ let storage_ctx_address =
   | Some addr -> addr
 
 (* --------------------------------------------------------------------- *)
-(* Calling a method from a solidity smart contractt *)
+(* Calling a method from a solidity smart contract *)
 (* --------------------------------------------------------------------- *)    
 
 (* Let's say we want to call "set" with argument data = 42. We need to
    encode this into a transaction and send it to the contract address,
    with enough gas for the method to complete its execution.  *)
 
-(* The encoding takes the form 
-    enc(method_signature) enc(arguments)
-   where juxtaposition means concatenation of bitstrings and
-   method_signature consists of the 4 first bytes of the keccak256
-   hash of the string representation of the signature of the method, 
-   which is here "set(uint256)".
-   Also, arguments are encoded as specified in the solidity ABI
-   format. 
+(* The encoding takes the form enc(method_signature) enc(arguments) where
+   juxtaposition means concatenation of bitstrings and
+   1) enc(method_signature), called the "function selector", consists of 
+   the 4 first bytes of the keccak256 hash of the string representation 
+   of the signature of the method, which is here "set(uint256)", in 
+   hexadecimal notation.
+   2) enc(arguments) is specified in the solidity ABI. For unstructured
+   arguments (such as ints) it is just the hexadecimal representation.
+
+   The keccack256 hash of "set(uint256)" is 
+   "60fe47b16ed402aae66ca03d2bfc51478ee897c26a1158669c7058d5f24898f4"
+   hence enc("set(uint256)") = "60fe47b1",
+   while the argument 42 is encoded in hexadecimal as 2A, which we must 
+   0-pad to 256 bits. The encoding of calling set with argument 42 is thus
+   "0x60fe47b1000000....00002A". This string will constitute the data
+   section of the transaction corresponding to the call.
 *)
+
+let tx =
+  let set_abi = List.find (fun { ABI.m_name } -> m_name = "set") abi in
+  Compile.call_method_tx
+    ~abi:set_abi
+    ~args:[ABI.Int 42L]
+    ~src:dummy_account
+    ~ctx:storage_ctx_address
+    ~gas:10000
+

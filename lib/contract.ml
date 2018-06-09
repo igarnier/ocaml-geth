@@ -306,7 +306,7 @@ struct
       | _ ->
         failwith "deploy_rpc: more than one contract in solidity_output"
 
-  let call_method ~(abi : ABI.method_abi) ~(args : ABI.value list) ~(uri : string) ~(src : Types.address) ~(ctx : Types.address) ~(gas : int) =
+  let call_method_tx ~(abi : ABI.method_abi) ~(args : ABI.value list) ~(src : Types.address) ~(ctx : Types.address) ~(gas : int) =
       let mname = abi.m_name in
       let inputs = abi.ABI.m_inputs in
       let siglen = List.length inputs in
@@ -320,12 +320,9 @@ struct
         in
         let bitstring = Bitstr.concat (method_id :: args) in
         let data = Bitstr.(hex_as_string (uncompress bitstring)) in
-        let transaction =
-          {
-            Types.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
-          }
-        in
-        Rpc.Eth.call ~uri ~transaction ~at_time:`latest
+        {
+          Types.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
+        }
       else
         let m = Printf.sprintf
             "call_method: # of arguments mismatch for method %s: %d expected vs %d actual\n" mname siglen arglen
