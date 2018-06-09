@@ -86,6 +86,10 @@ let deploy_receipt =
     | Some receipt -> receipt
   in
   wait ()
+
+(* There is a convenience function that does the send and waits for the receipt:
+   Rpc.Eth.send_transaction_and_get_receipt
+*)
     
 (* Get the contract address on chain *)
 let storage_ctx_address =
@@ -120,7 +124,7 @@ let storage_ctx_address =
    section of the transaction corresponding to the call.
 *)
 
-let tx =
+let set_42_tx =
   let set_abi = List.find (fun { ABI.m_name } -> m_name = "set") abi in
   Compile.call_method_tx
     ~abi:set_abi
@@ -129,3 +133,34 @@ let tx =
     ~ctx:storage_ctx_address
     ~gas:10000
 
+(* Send the transaction *)
+
+let _ = 
+  if
+    Rpc.Personal.unlock_account
+      ~uri
+      ~account:dummy_account
+      ~passphrase:"dummy"
+      ~unlock_duration:300
+  then
+    ()
+  else
+    failwith "Could not unlock account"
+
+let set_42_receipt =
+  Rpc.Eth.send_transaction_and_get_receipt ~uri ~transaction:set_42_tx
+
+(* How to check that 42 has effectively been set? We need to call the method
+   get. There is a big difference here however: as get does not modify the
+   state, we don't need to issue an actual transaction on the chain. Using
+   Rpc.Eth.call, we can inspect the chain and get the result directly.
+ *)
+
+let get_tx =
+  let get_abi = List.find (fun { ABI.m_name } -> m_name = "get") abi in
+  Compile.call_method_tx
+    ~abi:get_abi
+    ~args:[]
+    ~src:dummy_account
+    ~ctx:storage_ctx_address
+    ~gas:10000

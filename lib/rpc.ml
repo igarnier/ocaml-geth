@@ -144,6 +144,17 @@ struct
     rpc_call uri "eth_getTransactionReceipt" (`List [ `String (Types.hash256_to_string transaction_hash) ])
     |> Json.result
     |> Types.receipt_from_json
+
+  let send_transaction_and_get_receipt ~uri ~transaction =
+    let hash = send_transaction ~uri ~transaction in
+    let rec loop () =
+      match get_transaction_receipt ~uri ~transaction_hash:hash with
+      | None ->
+        Unix.sleep 1; loop ()
+      | Some receipt ->
+        receipt
+    in
+    loop ()
       
 end
   

@@ -29,6 +29,7 @@ sig
   val send_raw_transaction : uri:string -> data:string -> Types.hash256
   val call : uri:string -> transaction:Types.transaction -> at_time:time -> string
   val get_transaction_receipt : uri:string -> transaction_hash:Types.hash256 -> Types.transaction_receipt option
+  val send_transaction_and_get_receipt : uri:string -> transaction:Types.transaction -> Types.transaction_receipt
 end
 
 module Personal :
