@@ -2,6 +2,12 @@ open Batteries
 
 (* https://solidity.readthedocs.io/en/develop/abi-spec.html *)
 
+let assoc key fields =
+  try List.assoc key fields with
+  | Not_found ->
+    (Printf.printf "assoc: key %s not found\n%!" key;
+     raise Not_found)
+
 
 module SolidityTypes =
 struct
@@ -35,7 +41,11 @@ struct
     | Bool   of bool
     | String of string
 
-  type method_abi =
+  type abi =
+    | Method of method_abi
+    | Event of event_abi
+
+  and method_abi =
     {
       m_name       : string;     (* name of the method *)
       m_constant   : bool;       (* true if function is either Pure or View. Redundant??? *)
@@ -46,10 +56,20 @@ struct
       m_type       : mtype       (* Kind of method. Defaults to Function if omitted *)
     }
 
+  and event_abi =
+    {
+      e_name      : string;
+      e_inputs    : tuple_abi;
+      e_anonymous : bool;
+    }    
+    
+
   and tuple_abi = named_arg list
 
   and named_arg = { arg_name : string;
-                    arg_type : SolidityTypes.t }
+                    arg_type : SolidityTypes.t;
+                    (* potential additional field for Event: indexed:bool*)
+                  }
 
   and mtype =
     | Function
@@ -94,11 +114,14 @@ struct
     let elts = String.concat "," encodings in
     m_name^"("^elts^")"
 
-  let method_id method_abi =
+  let keccak_4_bytes str =
     let hash = Cryptokit.Hash.keccak 256 in
-    let resl = Cryptokit.hash_string hash (string_of_signature method_abi) in
-    let head = String.head resl 2 in
+    let resl = Cryptokit.hash_string hash str in
+    let head = String.head resl 4 in
     Bitstr.bits_of_string head
+
+  let method_id method_abi =
+    keccak_4_bytes (string_of_signature method_abi)
 
   (* -------------------------------------------------------------------------------- *)
 
@@ -149,9 +172,10 @@ struct
     match mtype with
     | `String mtype ->
       (match mtype with
-       | "function" -> Function
-       | "constructor" -> Constructor
-       | "callback" -> Callback
+       | "function" -> `Method Function
+       | "constructor" -> `Method Constructor
+       | "callback" -> `Method Callback
+       | "event" -> `Event
        | _ ->
          failwith ("method_type_of_json: incorrect method type "^mtype)       
       )
@@ -189,24 +213,34 @@ struct
     let json_args = Json.drop_list json in
     ListLabels.map json_args ~f:(fun argument ->
         let fields = Json.drop_assoc argument in
-        let arg_name = List.assoc "name" fields |> Json.drop_string in
-        let arg_type = List.assoc "type" fields |> type_of_json in
+        let arg_name = assoc "name" fields |> Json.drop_string in
+        let arg_type = assoc "type" fields |> type_of_json in
         { arg_name; arg_type }
       )
 
   let from_json json =
     ListLabels.map (Json.drop_list json) ~f:(fun method_abi ->
         let fields = Json.drop_assoc method_abi in
-        let m_name     = List.assoc "name" fields |> Json.drop_string in
-        let m_constant = List.assoc "constant" fields |> Json.drop_bool in
-        let m_inputs   = List.assoc "inputs" fields |> signature_of_json in
-        let m_outputs  = List.assoc "outputs" fields |> signature_of_json in
-        let m_payable  = List.assoc "payable" fields |> Json.drop_bool in
-        let m_mutability = List.assoc "stateMutability" fields |> Json.drop_string |> mutability_of_string in
-        let m_type = List.assoc "type" fields |> method_type_of_json in
-        {
-          m_name; m_constant; m_inputs; m_outputs; m_payable; m_mutability; m_type
-        }
+        let m_type = assoc "type" fields |> method_type_of_json in
+        match m_type with
+        | `Method m_type ->
+          let m_name     = assoc "name" fields |> Json.drop_string in
+          let m_constant = assoc "constant" fields |> Json.drop_bool in
+          let m_inputs   = assoc "inputs" fields |> signature_of_json in
+          let m_outputs  = assoc "outputs" fields |> signature_of_json in
+          let m_payable  = assoc "payable" fields |> Json.drop_bool in
+          let m_mutability = assoc "stateMutability" fields |> Json.drop_string |> mutability_of_string in
+
+          Method {
+            m_name; m_constant; m_inputs; m_outputs; m_payable; m_mutability; m_type
+          }
+        | `Event ->
+          let e_name   = assoc "name" fields |> Json.drop_string in
+          let e_inputs = assoc "inputs" fields |> signature_of_json in
+          let e_anonymous = assoc "anonymous" fields |> Json.drop_bool in
+          Event {
+            e_name; e_inputs; e_anonymous
+          }
       )
 
 end
@@ -224,7 +258,7 @@ struct
     {
       contract_name : string;
       bin           : string;
-      abi           : ABI.method_abi list;
+      abi           : ABI.abi list;
     }
 
   let exec_and_get_stdout command args =
@@ -263,19 +297,26 @@ struct
     end
 
   let to_json ~filename =
-    let result  = Json.from_string (exec_and_get_stdout "solc" [| "solc"; "--optimize"; "--combined-json"; "abi,bin,interface"; filename |]) in
-    let fields  = Json.drop_assoc result in
-    let version = List.assoc "version" fields |> Json.drop_string in
-    let contracts = List.assoc "contracts" fields |> Json.drop_assoc in
-    let contracts =
-      List.map (fun (contract_name, contract_contents) ->
-          let contents = Json.drop_assoc contract_contents in
-          let bin = List.assoc "bin" contents |> Json.drop_string in
-          let abi = List.assoc "abi" contents |> Json.drop_string |> Json.from_string |> ABI.from_json in
-          { contract_name; bin; abi }
-        ) contracts
-    in
-    { version; contracts }
+    let raw_jsn = exec_and_get_stdout "solc" [| "solc"; "--optimize"; "--combined-json"; "abi,bin,interface"; filename |] in
+    let result  = Json.from_string raw_jsn in
+    try
+      let fields  = Json.drop_assoc result in
+      let version   = assoc "version" fields |> Json.drop_string in
+      let contracts = assoc "contracts" fields |> Json.drop_assoc in
+      let contracts =
+        List.map (fun (contract_name, contract_contents) ->
+            let contents = Json.drop_assoc contract_contents in
+            let bin = assoc "bin" contents |> Json.drop_string in
+            let abi = assoc "abi" contents |> Json.drop_string |> Json.from_string |> ABI.from_json in
+            { contract_name; bin; abi }
+          ) contracts
+      in
+      { version; contracts }
+    with
+    | Not_found ->
+      Printf.printf "Error while parsing json.\n";
+      print_string raw_jsn;
+      exit 1
 
   let deploy_rpc : uri:string -> account:Types.address -> passphrase:string -> gas:int -> contract:solidity_output -> Types.hash256 =
     fun ~uri ~account ~passphrase ~gas ~contract ->
@@ -328,5 +369,13 @@ struct
             "call_method: # of arguments mismatch for method %s: %d expected vs %d actual\n" mname siglen arglen
         in
         failwith m
-         
+
+  let call_void_method_tx ~mname ~(src : Types.address) ~(ctx : Types.address) ~(gas : int) =
+      let method_id = ABI.keccak_4_bytes mname in
+      let data = Bitstr.(hex_as_string (uncompress method_id)) in
+      {
+        Types.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
+      }
+
+  
 end

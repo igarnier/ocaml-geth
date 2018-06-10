@@ -155,6 +155,21 @@ struct
         receipt
     in
     loop ()
+
+  let send_contract_and_get_receipt ~uri ~src ~data ~gas =
+    let open Types in
+    let tx =
+      {
+        src;
+        dst = None;
+        gas = Some gas;
+        gas_price = None;
+        value = None;
+        data;
+        nonce = None
+      }
+    in
+    send_transaction_and_get_receipt ~uri ~transaction:tx
       
 end
   

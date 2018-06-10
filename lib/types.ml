@@ -10,15 +10,15 @@ let address_from_string x =
   if String.length x != 42 || not (Bitstr.string_is_hex x) then
     failwith "address_from_string: input must be 20 bytes (40 hex chars) 0x-prefixed"
   else
-    x
+    (x : address)
 
 let hash256_to_string x = x
   
-let hash256_from_string x =
+let hash256_from_string (x : string) =
   if String.length x != 66 || not (Bitstr.string_is_hex x) then
     failwith "hash256_from_string: input must be 32 bytes (64 hex chars) 0x-prefixed"
   else
-    x
+    (x : hash256)
 
 let hash512_to_string x = x
   
@@ -30,7 +30,7 @@ let hash512_from_string x =
  Got %s, length %d instead." x len in
     failwith msg
   else
-    x
+    (x : hash512)
 
 
 type wei       = int (* Z.t ? *)
@@ -56,7 +56,7 @@ type transaction_receipt =
     src                 : address;
     dst                 : address option;
     gas_used            : int;
-    logs                : string list;
+    logs                : log list;
     (* unused:
      * logs_bloom : string;
      * root : string; *)
@@ -64,6 +64,18 @@ type transaction_receipt =
     transaction_index   : int
   }
 
+and log =
+  {
+    log_address           : address;
+    log_topics            : hash256 list;
+    log_data              : string; (* hex_string *)
+    log_block_number      : int;
+    log_transaction_hash  : hash256;
+    log_transaction_index : int;
+    log_block_hash        : hash256;
+    log_index             : int;
+    log_removed           : bool
+  }
 
 type port_info =
   {
@@ -129,6 +141,37 @@ let assoc key fields =
   | Not_found ->
     failwith (Printf.sprintf "assoc: key %s not found" key)
 
+let log_from_json : Json.json -> log =
+  fun j ->
+    match j with
+    | `Assoc fields ->
+      let log_address = assoc "address" fields |> Json.drop_string |> address_from_string in
+      let log_topics  =
+        assoc "topics" fields |> Json.drop_list
+        |> List.map (hash256_from_string % Json.drop_string)
+      in
+      let log_data = assoc "data" fields |> Json.drop_string in
+      let log_block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
+      let log_transaction_hash = assoc "transactionHash" fields |> Json.string |> hash256_from_string in
+      let log_transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
+      let log_block_hash = assoc "blockHash" fields |> Json.string |> hash256_from_string in
+      let log_index = assoc "log_index" fields |> Json.drop_int_as_string in
+      let log_removed = assoc "removed" fields |> Json.drop_bool in
+      {
+        log_address;
+        log_topics;
+        log_data;
+        log_block_number;
+        log_transaction_hash;
+        log_transaction_index;
+        log_block_hash;
+        log_index;
+        log_removed
+      }
+    | _ ->      
+      let s = Yojson.Safe.to_string j in
+      failwith ("Types.log_from_json: unexpected json: "^s)
+
 let receipt_from_json : Json.json -> transaction_receipt option =
   fun j ->
     match j with
@@ -154,7 +197,10 @@ let receipt_from_json : Json.json -> transaction_receipt option =
           | _ ->
             failwith "Types.receipt_from_json: unexpected result"
         in
-        let logs = assoc "logs" fields |> Json.drop_string_list in
+        let logs = assoc "logs" fields
+                   |> Json.drop_list
+                   |> List.map log_from_json
+        in
         let transaction_hash = assoc "transactionHash" fields |> Json.drop_string in
         let transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
         Some {

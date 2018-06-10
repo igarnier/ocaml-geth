@@ -626,15 +626,15 @@ let deploy (program : bytecode) =
   let prog_posw   = literal_width prog_pos in
   let deploy_code =
     [
-      Instr (Ops.push lengthlitw);
+      Instr (Ops.push lengthlitw); (* store the length of program *)
       Literal lengthlit;
-      Instr DUP1;
-      Instr (Ops.push prog_posw);
+      Instr DUP1;                  (* duplicate length of program *)
+      Instr (Ops.push prog_posw);  (* push program position in code *)
       Literal prog_pos;
-      Instr (Ops.push 1);
+      Instr (Ops.push 1);          (* push 0, target in memory *)
       Literal (literal_of_int 0);
-      Instr CODECOPY;
-      Instr (Ops.push 1);
+      Instr CODECOPY;              (* copy code to memory (pos 0) *)
+      Instr (Ops.push 1);          (* return code position in memory (0) *)
       Literal (literal_of_int 0);
       Instr RETURN;
     ]

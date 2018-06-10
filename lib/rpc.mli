@@ -30,6 +30,7 @@ sig
   val call : uri:string -> transaction:Types.transaction -> at_time:time -> string
   val get_transaction_receipt : uri:string -> transaction_hash:Types.hash256 -> Types.transaction_receipt option
   val send_transaction_and_get_receipt : uri:string -> transaction:Types.transaction -> Types.transaction_receipt
+  val send_contract_and_get_receipt : uri:string -> src:Types.address -> data:string -> gas:int -> Types.transaction_receipt
 end
 
 module Personal :
