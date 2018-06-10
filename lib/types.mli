@@ -1,3 +1,8 @@
+
+(** An Ethereum address corresponding to a private key k_r is the 
+    rightmost truncation to 160 bit of a 256 bit Keccak hash
+    of the corresponding ECDSA public key. Cf Yellow Paper. *)
+
 (** Addresses are 20 bytes long, 40 bytes in hex form + 0x. *)
 (* TODO: use Bitstr.hex_string *)
 type address = private string
@@ -41,13 +46,27 @@ type transaction_receipt =
     src                 : address;
     dst                 : address option;
     gas_used            : int;
-    logs                : string list;
+    logs                : log list;
     (* unused:
      * logs_bloom : string;
      * root : string; *)
     transaction_hash    : hash256;
     transaction_index   : int
   }
+
+and log =
+  {
+    log_address           : address;
+    log_topics            : hash256 list;
+    log_data              : string; (* hex_string *)
+    log_block_number      : int;
+    log_transaction_hash  : hash256;
+    log_transaction_index : int;
+    log_block_hash        : hash256;
+    log_index             : int;
+    log_removed           : bool
+  }
+
 
 type port_info =
   {

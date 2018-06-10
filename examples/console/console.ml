@@ -1,4 +1,4 @@
-open Mlparity
+open Ocaml_geth
 open Rpc
 
 (* The RPC ports will typically be blocked from outside (they really should, for
@@ -22,7 +22,7 @@ let _ = Unix.sleep 10
 (* how rich are we *)
 let _ =
   let balance = Eth.get_balance ~uri ~address:account ~at_time:`latest in
-  Printf.printf "%s: %s wei\n" account (Z.to_string balance)
+  Printf.printf "%s: %s wei\n" (account :> string) (Z.to_string balance)
 
 (* Create a new contract *)
 let create_contract () =
@@ -70,7 +70,7 @@ let create_contract () =
   (* unlock account prior to deploying contract *)
   assert (Personal.unlock_account ~uri ~account ~passphrase ~unlock_duration:300);
   let transaction_hash = Eth.send_transaction ~uri ~transaction:deploy_transaction in
-  Printf.printf "deploy tx hash: %s\n" transaction_hash;
+  Printf.printf "deploy tx hash: %s\n" (transaction_hash :> string);
   (* wait until tx is processed *)
   let receipt =
     let rec loop () =
@@ -87,7 +87,7 @@ let create_contract () =
     | None      -> failwith "Error while accessing contract address"
     | Some addr -> addr
   in
-  Printf.printf "smart contract addr: %s\n" contract_addr;
+  Printf.printf "smart contract addr: %s\n" (contract_addr :> string);
   (* Check that contract code is correctly uploaded *)
   let code = Eth.get_code ~uri ~address:contract_addr ~at_time:`latest in
   Printf.printf "smart contract code: %s\n" code;

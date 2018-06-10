@@ -1,5 +1,4 @@
-open Mlparity
-open Ssh_client
+open Ocaml_geth
 
 let genesis =
   GethInit.Genesis.({
@@ -12,13 +11,13 @@ let genesis =
 
       alloc = [];
 
-      coinbase    = "0x0000000000000000000000000000000000000000";
+      coinbase    = Types.address_from_string "0x0000000000000000000000000000000000000000";
       difficulty  = 1;
       extra_data  = "";
       gas_limit   = 0x80000000;
       nonce       = 0x107;
-      mix_hash    = "0x0000000000000000000000000000000000000000000000000000000000000000";
-      parent_hash = "0x0000000000000000000000000000000000000000000000000000000000000000";
+      mix_hash    = Types.hash256_from_string "0x0000000000000000000000000000000000000000000000000000000000000000";
+      parent_hash = Types.hash256_from_string "0x0000000000000000000000000000000000000000000000000000000000000000";
       timestamp   = 0;
   })
 
@@ -35,26 +34,29 @@ let conf =
 let pepito_on_laptop () =
   { GethInit.ip_address = "127.0.0.1";
     ssh_port = 22;
+    eth_port = 30303;
     login = "pepito";
-    password = Easy.input_password ~host:"127.0.0.1" ~username:"pepito"
+    password = Ssh_client.Easy.input_password ~host:"127.0.0.1" ~username:"pepito";    
   }
 
 let pepito_on_server () =
   { GethInit.ip_address = "129.x.y.z";
     ssh_port = 22;
+    eth_port = 30303;
     login = "pepito";
-    password = Easy.input_password ~host:"just for display purposes" ~username:"pepito"
+    password = Ssh_client.Easy.input_password ~host:"just for display purposes" ~username:"pepito"
   }
 
 let conchita_on_osx () =
   { GethInit.ip_address = "82.x.y.z";
     ssh_port = 22;
+    eth_port = 30303;    
     login = "conchita";
-    password = Easy.input_password ~host:"conchitas_apple_II" ~username:"conchita"
+    password = Ssh_client.Easy.input_password ~host:"conchitas_apple_II" ~username:"conchita"
   }
 
 
-let network = [ pepito_on_laptop (); pepito_on_server; conchita_on_osx () ]
+let network = [ pepito_on_laptop (); pepito_on_server (); conchita_on_osx () ]
 
 let _ =
   GethInit.deploy conf network

@@ -13,6 +13,8 @@ val nohup : command -> command
 val background : command -> command
 val cat    : string -> command
 val screen : command -> command
+val which : string -> command
+val exists : string -> command
 
 val flush_stdout : Ssh_client.Types.ssh_channel -> unit
 
