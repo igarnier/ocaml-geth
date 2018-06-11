@@ -26,26 +26,28 @@ val hash512_from_string : string -> hash512
 type wei      = int
 type block_id = int
 
+
 type transaction =
   {
     src : address;
     dst : address option;
-    gas : int option; (* Z.t *)
-    gas_price : int option; (* Z.t *)
-    value : int option; (* Z.t *)
+    gas : Z.t option;
+    gas_price : Z.t option;
+    value : Z.t option;
     data : string;
     nonce : int option
   }
+
 
 type transaction_receipt =
   {
     block_hash          : hash256;
     block_number        : int;
     contract_address    : address option;
-    cumulative_gas_used : int;
+    cumulative_gas_used : Z.t;
     src                 : address;
     dst                 : address option;
-    gas_used            : int;
+    gas_used            : Z.t;
     logs                : log list;
     (* unused:
      * logs_bloom : string;

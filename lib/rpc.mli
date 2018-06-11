@@ -14,8 +14,8 @@ sig
   val syncing : uri:string -> bool
   val coinbase : uri:string -> Types.address
   val mining : uri:string -> bool
-  val hashrate : uri:string -> int
-  val gas_price : uri:string -> int
+  val hashrate : uri:string -> Z.t
+  val gas_price : uri:string -> Z.t
   val accounts : uri:string -> Types.address list
   val block_number : uri:string -> int
   val get_balance : uri:string -> address:Types.address -> at_time:time -> Z.t
@@ -30,13 +30,13 @@ sig
   val call : uri:string -> transaction:Types.transaction -> at_time:time -> string
   val get_transaction_receipt : uri:string -> transaction_hash:Types.hash256 -> Types.transaction_receipt option
   val send_transaction_and_get_receipt : uri:string -> transaction:Types.transaction -> Types.transaction_receipt
-  val send_contract_and_get_receipt : uri:string -> src:Types.address -> data:string -> gas:int -> Types.transaction_receipt
+  val send_contract_and_get_receipt : uri:string -> src:Types.address -> data:string -> gas:Z.t -> Types.transaction_receipt
 end
 
 module Personal :
 sig
 
-  val send_transaction : uri:string -> src:Types.address -> dst:Types.address -> value:int -> src_pwd:string -> Types.hash256
+  val send_transaction : uri:string -> src:Types.address -> dst:Types.address -> value:Z.t -> src_pwd:string -> Types.hash256
   val new_account : uri:string -> passphrase:string -> Types.address
   val unlock_account : uri:string -> account:Types.address -> passphrase:string -> unlock_duration:int -> bool
   
@@ -45,7 +45,7 @@ end
 module Miner :
 sig
 
-  val set_gas_price : uri:string -> gas_price:int -> bool
+  val set_gas_price : uri:string -> gas_price:Z.t -> bool
   val start : uri:string -> thread_count:int -> unit
   val stop : uri:string -> bool
   val set_ether_base : uri:string -> address:Types.address -> bool

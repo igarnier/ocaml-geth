@@ -40,9 +40,9 @@ type transaction =
   {
     src : address;
     dst : address option;
-    gas : int option;
-    gas_price : int option;
-    value : int option;
+    gas : Z.t option;
+    gas_price : Z.t option;
+    value : Z.t option;
     data : string;
     nonce : int option
   }
@@ -52,10 +52,10 @@ type transaction_receipt =
     block_hash          : hash256;
     block_number        : int;
     contract_address    : address option;
-    cumulative_gas_used : int;
+    cumulative_gas_used : Z.t;
     src                 : address;
     dst                 : address option;
-    gas_used            : int;
+    gas_used            : Z.t;
     logs                : log list;
     (* unused:
      * logs_bloom : string;
@@ -123,14 +123,17 @@ type peer_info = peer list
 let hex i =
   `String (Json.hex_of_int i)
 
+let zhex i =
+  `String (Json.hex_of_bigint i)
+
 let transaction_to_json : transaction -> Json.json =
   fun t ->
     let args =
       [ ("from", `String (address_to_string t.src)) ]
       @ (match t.dst with Some x -> [("to", `String (address_to_string x))] | _ -> [])
-      @ (match t.gas with Some x -> [("gas", hex x)] | _ -> [])
-      @ (match t.gas_price with Some x -> [("gasPrice", hex x)] | _ -> [])
-      @ (match t.value with Some x -> [("value", hex x)] | _ -> [])
+      @ (match t.gas with Some x -> [("gas", zhex x)] | _ -> [])
+      @ (match t.gas_price with Some x -> [("gasPrice", zhex x)] | _ -> [])
+      @ (match t.value with Some x -> [("value", zhex x)] | _ -> [])
       @ [("data", `String t.data)]
       @ (match t.nonce with Some x -> [("nonce", `Int x)] | _ -> [])
     in
@@ -187,8 +190,8 @@ let receipt_from_json : Json.json -> transaction_receipt option =
           | _ ->
             failwith "Types.receipt_from_json: unexpected result"
         in
-        let cumulative_gas_used = assoc "cumulativeGasUsed" fields |> Json.drop_int_as_string in
-        let gas_used = assoc "gasUsed" fields |> Json.drop_int_as_string in    
+        let cumulative_gas_used = assoc "cumulativeGasUsed" fields |> Json.drop_bigint_as_string in
+        let gas_used = assoc "gasUsed" fields |> Json.drop_bigint_as_string in    
         let src = assoc "from" fields |> Json.drop_string |> address_from_string in
         let dst =
           match assoc "to" fields with

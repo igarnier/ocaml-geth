@@ -2,6 +2,8 @@ type json = Yojson.Safe.json
 
 let hex_of_int x = Printf.sprintf "0x%x" x
 
+let hex_of_bigint x = Z.format "0x%x" x
+
 let clean_dump json =
   Yojson.Safe.to_string json
 
@@ -48,6 +50,11 @@ let drop_null (x : json) =
 let drop_int_as_string (x : json) =
   match x with
   | `String n -> int_of_string n
+  | _ -> failwith ("drop_int_as_string: bad argument "^(clean_dump x))
+
+let drop_bigint_as_string (x : json) =
+  match x with
+  | `String n -> Z.of_string n
   | _ -> failwith ("drop_int_as_string: bad argument "^(clean_dump x))
 
 let drop_string_list (x : json) =

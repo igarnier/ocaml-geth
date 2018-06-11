@@ -81,10 +81,10 @@ struct
     rpc_call uri "eth_mining" `Null |> Json.bool
 
   let hashrate ~uri =
-    rpc_call uri "eth_hashrate" `Null |> Json.int_as_string
+    rpc_call uri "eth_hashrate" `Null |> Json.bigint_as_string
 
   let gas_price ~uri =
-    rpc_call uri "eth_gasPrice" `Null |> Json.int_as_string
+    rpc_call uri "eth_gasPrice" `Null |> Json.bigint_as_string
 
   let accounts ~uri =
     rpc_call uri "eth_accounts" `Null
@@ -180,7 +180,7 @@ struct
   open Types
 
   let send_transaction ~uri ~src ~dst ~value ~src_pwd =
-    let value = Json.hex_of_int value in
+    let value = Json.hex_of_bigint value in
     let args  =
         `List [`Assoc [ ("from", `String (address_to_string src));
                         ("to", `String (address_to_string dst));
@@ -210,7 +210,7 @@ module Miner =
 struct
 
   let set_gas_price ~uri ~gas_price =
-    let args = `String (Json.hex_of_int gas_price) in
+    let args = `String (Json.hex_of_bigint gas_price) in
     rpc_call uri "miner_setGasPrice" (`List [args]) |> Json.bool
 
   let start ~uri ~thread_count =

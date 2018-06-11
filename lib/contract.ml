@@ -318,7 +318,7 @@ struct
       print_string raw_jsn;
       exit 1
 
-  let deploy_rpc : uri:string -> account:Types.address -> passphrase:string -> gas:int -> contract:solidity_output -> Types.hash256 =
+  let deploy_rpc : uri:string -> account:Types.address -> passphrase:string -> gas:Z.t -> contract:solidity_output -> Types.hash256 =
     fun ~uri ~account ~passphrase ~gas ~contract ->
       match contract.contracts with
       | [ ctx ] ->
@@ -333,7 +333,7 @@ struct
           {
             src = account;
             dst = None;
-            gas = Some 100000;
+            gas = Some gas;
             gas_price = None; (* there is a sensible default *)
             value = None;
             data = bytecode;
@@ -347,7 +347,7 @@ struct
       | _ ->
         failwith "deploy_rpc: more than one contract in solidity_output"
 
-  let call_method_tx ~(abi : ABI.method_abi) ~(args : ABI.value list) ~(src : Types.address) ~(ctx : Types.address) ~(gas : int) =
+  let call_method_tx ~(abi : ABI.method_abi) ~(args : ABI.value list) ~(src : Types.address) ~(ctx : Types.address) ~(gas : Z.t) =
       let mname = abi.m_name in
       let inputs = abi.ABI.m_inputs in
       let siglen = List.length inputs in
@@ -370,7 +370,7 @@ struct
         in
         failwith m
 
-  let call_void_method_tx ~mname ~(src : Types.address) ~(ctx : Types.address) ~(gas : int) =
+  let call_void_method_tx ~mname ~(src : Types.address) ~(ctx : Types.address) ~(gas : Z.t) =
       let method_id = ABI.keccak_4_bytes mname in
       let data = Bitstr.(hex_as_string (uncompress method_id)) in
       {
