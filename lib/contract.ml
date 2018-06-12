@@ -44,7 +44,7 @@ struct
 
   let is_dynamic t =
     match t with
-    | Tatomic (Tbytes _)
+    | Tatomic (Tbytes { nbytes = DynamicLength })
     | Tatomic Tstring
     | Tstatic_array _
     | Ttuple _
@@ -173,17 +173,21 @@ struct
     | Int { t } ->
       (match t with
        | Tatomic Tuint { w }
-       | Tatomic Tint { w } -> bits_to_bytes w
+       | Tatomic Tint { w } ->
+         (* data is padded to 32 bytes *)
+         bits_to_bytes (Bits.int 256)           
        | _ -> ill_typed ())
     | Bool _ ->
       Bytes.int 32
     | String { t } ->
       (match t with
-       | Tatomic Taddress  -> bits_to_bytes (Bits.int 160)
-       | Tatomic (Tbytes { nbytes = StaticLength nbytes }) ->
-         nbytes
+       | Tatomic Taddress
+       | Tatomic (Tbytes { nbytes = StaticLength _ }) ->
+         (* Everything is padded to 32 bytes anyway. *)
+         bits_to_bytes (Bits.int 256)
        | Tatomic (Tbytes { nbytes = DynamicLength })
        | Tatomic Tstring ->
+         (* In the dynamic case, the offset is also padded to 32 bytes. *)
          bits_to_bytes (Bits.int 256)
        | _ ->
          ill_typed ())
@@ -224,6 +228,7 @@ struct
       if i < 0L then
         failwith "Contract.ABI.encode: cannot encode negative integer as unsigned int"
       else
+        Printf.printf "encoding uint %Ld as %s\n" i (Bitstr.(hex_as_string (uncompress (bits_of_int64 i))));
         Bitstr.(zero_pad_to ~dir:`left ~bits:(bits_of_int64 i) ~target_bits:(Bits.int 256))
     | Tint { w } ->
       if i < 0L then
@@ -240,10 +245,10 @@ struct
        Bitstr.zero_pad_to ~dir:`left ~bits:encoded ~target_bits:(Bits.int 256)
      | Tbytes { nbytes = (StaticLength n) } ->
        if (Bytes.to_int n) <= 0 || (Bytes.to_int n) > 32 then
-         failwith "encode_value: Bytes type has wrong length";
+         failwith "encode_string: Bytes type has wrong length";
        let len = String.length s in
        if len <> (Bytes.to_int n) then
-         failwith "encode_value: string value length mistmatch with type length";
+         failwith "encode_string: string value length mistmatch with type length";
        zero_pad_string_to_mod32 s
      | Tstring
      (* We're supposed to utf8-encode [s] and then treat it as bytes. 
@@ -253,7 +258,7 @@ struct
        let len = encode_int (Int64.of_int len) (Tuint { w = Bits.int 256 }) in
        Bitstr.concat [len; zero_pad_string_to_mod32 s]
      | _ ->
-       failwith "encode_value: type mismatch (string)"
+       failwith "encode_string: type mismatch (string)"
 
   let rec encode_value (value : value) =
     let open SolidityTypes in
@@ -266,10 +271,14 @@ struct
          failwith "encode_value: type mismatch (bool)"
       )
     | Bool { v } ->
-      if v then
-        encode_int 1L (Tuint { w = Bits.int 256 })
-      else
-        encode_int 0L (Tuint { w = Bits.int 256 })
+      let res =
+        if v then
+          encode_int 1L (Tuint { w = Bits.int 256 })
+        else
+          encode_int 0L (Tuint { w = Bits.int 256 })
+      in
+      Printf.printf "encoding bool %b: %s\n" v Bitstr.(hex_as_string (uncompress res));
+      res
     | String { v; t } ->
       (match t with
        | Tatomic atomic ->
@@ -287,6 +296,7 @@ struct
          taking into account header size. *)
       let _, offsets =
         List.fold_left (fun (offset, acc) bitstr ->
+            let _ = Printf.printf "offset for %s: %d bytes\n" Bitstr.(hex_as_string (uncompress bitstr)) (Bytes.to_int offset) in
             let byte_len = bits_to_bytes (Bitstr.bit_length bitstr) in
             let next_offset = Bytes.(offset + byte_len) in
             (next_offset, offset :: acc)
@@ -297,26 +307,28 @@ struct
       Bitstr.concat (heads @ tails)
       
   and encode_heads (value : value) (offset : Bytes.t) =
-    match value with
-    | Int _
-    | Bool _ ->
+    let open SolidityTypes in
+    if not (is_dynamic (type_of value)) then
       encode_value value
-    | String { v; t } ->
-      encode_int
-        (Int64.of_int (Bytes.to_int offset))
-        (SolidityTypes.Tuint { w = Bits.int 256 })
-    | Tuple _ ->
-      failwith "encode_heads: tuple not handled yet"
+    else match value with
+      | String { v; t } ->
+        encode_int
+          (Int64.of_int (Bytes.to_int offset))
+          (SolidityTypes.Tuint { w = Bits.int 256 })
+      | Tuple _ ->
+        failwith "encode_heads: tuple not handled yet"
+      | _ ->
+        failwith "encode_heads: bug found"
 
   and encode_tails (value : value) =
-    match value with
-    | Int _
-    | Bool _ ->
+    let open SolidityTypes in
+    if not (is_dynamic (type_of value)) then
       Bitstr.bits_of_string ""
-    | String _ ->
-      encode_value value
-    | _ ->
-      failwith ""
+    else match value with
+      | String _ ->
+        encode_value value
+      | _ ->
+        failwith "encode_tails: bug found"
       
 
   (* let encode_list (vs : value list) (ts : SolidityTypes.t list) =

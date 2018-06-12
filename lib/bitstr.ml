@@ -27,7 +27,9 @@ let compress : hexstring -> bitstring =
   fun (x : hexstring) ->
     assert (string_is_hex x);
     let stripped = String.tail x 2 in
-    Hex.to_string (`Hex stripped)
+    try Hex.to_string (`Hex stripped)
+    with Invalid_argument s ->
+      raise (Invalid_argument (s^": "^x))
 
 let uncompress : bitstring -> hexstring =
   fun (x : bitstring) ->
@@ -35,8 +37,14 @@ let uncompress : bitstring -> hexstring =
     "0x"^result
 
 let hex_of_int i =
-  Printf.sprintf "0x%x" i
-
+  let hexstr = 
+    Printf.sprintf "%x" i
+  in
+  if String.length hexstr mod 2 = 0 then
+    "0x"^hexstr
+  else
+    "0x0"^hexstr
+    
 let hex_of_char c =
   hex_of_int (Char.code c)
 
@@ -47,7 +55,13 @@ let hex_of_string string =
     string
 
 let hex_of_int64 (i : int64) =
-  Printf.sprintf "0x%Lx" i
+  let hexstr = 
+    Printf.sprintf "%Lx" i
+  in
+  if String.length hexstr mod 2 = 0 then
+    "0x"^hexstr
+  else
+    "0x0"^hexstr
 
 let hex_as_string x = x
 
@@ -59,6 +73,9 @@ let bits_of_int64 i =
 
 let bits_of_string (s : string) =
   (s : bitstring)
+
+let bits_as_string (s : bitstring) =
+  (s : string)
 
 type pad_direction = [ `left | `right ]
 

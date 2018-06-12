@@ -16,6 +16,7 @@ val hex_as_string : hexstring -> string
 
 val bits_of_int64 : int64 -> bitstring
 val bits_of_string : string -> bitstring
+val bits_as_string : bitstring -> string
 
 type pad_direction = [ `left | `right ]
   

@@ -1,4 +1,5 @@
 open Ocaml_geth
+open Basic (* for Bits and Bytes *)
 open Contract
 
 (* --------------------------------------------------------------------- *)
@@ -30,52 +31,58 @@ let input_password (account : Types.address) =
 (* Deploying a smart contract. We functorize the code over some global
    parameters (like the creating account). *)
 (* --------------------------------------------------------------------- *)
-let account = Types.address_from_string "0x0cb903d0139c1322a52f70038332efd363f94ea8"
-let uri     = "http://localhost:8545"
 
-(* module Storage
- *     (X : sig
+(* Testing ABI argument encoding *)
+(* open SolidityTypes
  * 
- *       val account : Types.address
- *       val uri     : string
- * 
- *     end) =
- * struct *)
+ * let _ =
+ *   let string_t = Tatomic Tstring in
+ *   let uint_t   = Tatomic (Tuint { w = Bits.int 32 }) in
+ *   let res = ABI.encode_value (ABI.Tuple [ ABI.Int { v = 123L; t = uint_t };
+ *                                           ABI.Int { v = 456L; t = uint_t };
+ *                                           ABI.String { v = "thequickbrownfoxjumpsoverthelazydog"; t = string_t };
+ *                                           ABI.String { v = "shesellsseashellsontheseashore"; t = string_t }
+ *                                         ])
+ *   in
+ *   Printf.printf "%s\n" (Bitstr.(hex_as_string (uncompress res))) *)
+
+module Storage
+    (X : sig
+
+       val account : Types.address
+       val uri     : string
+
+     end) =
+struct
 
   (* Compile solidity file using solc with the right options, parse the
      result back. *)
-let storage_contract =
-  match Compile.to_json ~filename:"storage.sol" with
-  | { Compile.contracts = [storage] } -> storage
-  | _ ->
-    failwith "More than one contract in file"
+  let storage_contract =
+    match Compile.to_json ~filename:"storage.sol" with
+    | { Compile.contracts = [storage] } -> storage
+    | _ ->
+      failwith "More than one contract in file"
 
   (* Extract the contract: bin is the bytecode, abi specifies how to call
      methods from the contract. 
   *)
-let Compile.({ bin; abi }) = storage_contract
+  let Compile.({ bin; abi }) = storage_contract
 
   (* Storing a contract on-chan requires prefixing it with some specific "deploy code".
-     Think of an auto-installer. 
-     To do so, we parse the bin file back into EVM opcodes, prefix the opcodes adequately
-     and dump back the result as a string.
+     Think of an auto-installer. Contracts produced by solc are automatically prefixed
+     by such "deploy code", so we don't need to do anything for that.
   *)
-let deployable_bin =
-  Evm.parse_hexstring ("0x"^bin)
-  |> Evm.deploy
-  |> Evm.dump
 
-(* In order to deploy a contract, we need to send a specific transaction containing
-     the deployable_bin. 
-     We have to send the contract from a specific source account that is going to pay
-     for the gas used during deployement.
-*)
-let deploy_tx ~(src : Types.address) ~(gas : int) ~(data : string) =
-  let open Types in
+  (* In order to deploy a contract, we need to send a specific transaction containing
+     the deployable_bin. We have to send the contract from a specific source account 
+     that is going to pay for the gas used during deployement.
+  *)
+  let deploy_tx ~(src : Types.address) ~(gas : int) ~(data : string) =
+    let open Types in
     {
       src;
       dst = None;
-      gas = Some gas;
+      gas = Some (Z.of_int gas);
       gas_price = None;
       value = None;
       data;
@@ -87,27 +94,27 @@ let deploy_tx ~(src : Types.address) ~(gas : int) ~(data : string) =
   let _ =
     if
       Rpc.Personal.unlock_account
-        ~uri
-        ~account
-        ~passphrase:(input_password account)
+        ~uri:X.uri
+        ~account:X.account
+        ~passphrase:(input_password X.account)
         ~unlock_duration:300
     then
       ()
     else
       failwith "Could not unlock account"
 
-(* Send the tx *)
-let transaction_hash =
-  let tx = deploy_tx ~src:account ~gas:100000 ~data:deployable_bin in
-  Rpc.Eth.send_transaction
-    ~uri
-    ~transaction:tx
-
-  (* Get transaction receipt. This might take a while. *)
+  (* Send the tx and get receipt: long version *)
   let deploy_receipt =
+    let transaction_hash =
+      let tx = deploy_tx ~src:X.account ~gas:999999 ~data:bin in
+      Rpc.Eth.send_transaction
+        ~uri:X.uri
+        ~transaction:tx
+    in
+    (* Get transaction receipt. This might take a while. *)
     let rec wait () =
       match
-        Rpc.Eth.get_transaction_receipt ~uri ~transaction_hash
+        Rpc.Eth.get_transaction_receipt ~uri:X.uri ~transaction_hash
       with
       | None ->
         Unix.sleep 1;
@@ -116,8 +123,11 @@ let transaction_hash =
     in
     wait ()
 
-  (* There is a convenience function that does the send and waits for the receipt:
-     Rpc.Eth.send_transaction_and_get_receipt
+  (* This is all already neatly packed in:
+
+  let deploy_receipt =
+    Rpc.Eth.send_contract_and_get_receipt ~uri:X.uri ~src:X.account ~data:bin ~gas:999999
+
   *)
 
   (* Get the contract address on chain *)
@@ -154,22 +164,27 @@ let transaction_hash =
   *)
 
   let set_42_tx =
-    let set_abi = List.find (fun { ABI.m_name } -> m_name = "set") abi in
+    let uint32_t = SolidityTypes.(Tatomic (Tuint { w = Bits.int 32 })) in
+    let ABI.Method set_abi =
+      List.find (function | (ABI.Method { ABI.m_name }) -> m_name = "set"
+                          | _ -> false
+        ) abi
+    in
     Compile.call_method_tx
       ~abi:set_abi
-      ~args:[ABI.Int 42L]
-      ~src:account
+      ~args:[ABI.Int { v = 42L; t = uint32_t }]
+      ~src:X.account
       ~ctx:storage_ctx_address
-      ~gas:100000
+      ~gas:(Z.of_int 100000)
 
   (* Send the transaction *)
 
   let _ = 
     if
       Rpc.Personal.unlock_account
-        ~uri
-        ~account:account
-        ~passphrase:(input_password account)
+        ~uri:X.uri
+        ~account:X.account
+        ~passphrase:(input_password X.account)
         ~unlock_duration:300
     then
       ()
@@ -177,7 +192,7 @@ let transaction_hash =
       failwith "Could not unlock account"
 
   let set_42_receipt =
-    Rpc.Eth.send_transaction_and_get_receipt ~uri ~transaction:set_42_tx
+    Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:set_42_tx
 
   (* How to check that 42 has effectively been set? We need to call the method
      get. There is a big difference here however: as get does not modify the
@@ -186,15 +201,21 @@ let transaction_hash =
   *)
 
   let get_tx =
-    let get_abi = List.find (fun { ABI.m_name } -> m_name = "get") abi in
+    let ABI.Method get_abi =
+      List.find (function | (ABI.Method { ABI.m_name }) -> m_name = "get"
+                          | _ -> false
+        ) abi
+    in
     Compile.call_method_tx
       ~abi:get_abi
       ~args:[]
-      ~src:account
+      ~src:X.account
       ~ctx:storage_ctx_address
-      ~gas:10000
+      ~gas:(Z.of_int 10000)
 
   let get_42_result =
-    Rpc.Eth.call ~uri ~transaction:set_42_tx ~at_time:`latest
+    Rpc.Eth.call ~uri:X.uri ~transaction:set_42_tx ~at_time:`latest
 
 (* end *)
+
+end
