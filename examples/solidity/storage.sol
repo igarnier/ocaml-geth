@@ -1,11 +1,19 @@
-// Taken from https://medium.com/@gus_tavo_guim/deploying-a-smart-contract-the-hard-way-8aae778d4f2a
-
 pragma solidity ^0.4.10;
 
 contract Storage {
+
+  event Set(uint256);
+
   uint256 storedData;
+  string  message;
+
+  function Storage(uint256 initialData, string initialMessage) {
+    storedData = initialData;
+    message    = initialMessage;
+  }
 
   function set(uint256 data) {
+    emit Set(data);
     storedData = data;
   }
 

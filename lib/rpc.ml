@@ -165,7 +165,7 @@ struct
         gas = Some gas;
         gas_price = None;
         value = None;
-        data;
+        data = Bitstr.hex_as_string data;
         nonce = None
       }
     in

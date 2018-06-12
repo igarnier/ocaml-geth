@@ -1,3 +1,5 @@
+open Batteries
+
 open Ocaml_geth
 open Basic (* for Bits and Bytes *)
 open Contract
@@ -46,6 +48,7 @@ let input_password (account : Types.address) =
  *   in
  *   Printf.printf "%s\n" (Bitstr.(hex_as_string (uncompress res))) *)
 
+
 module Storage
     (X : sig
 
@@ -53,83 +56,29 @@ module Storage
        val uri     : string
 
      end) =
-struct
+struct  
+
+  let _ =
+    let passphrase = input_password X.account in
+    Rpc.Personal.unlock_account ~account:X.account ~uri:"http://localhost:8545" ~passphrase ~unlock_duration:3600
 
   (* Compile solidity file using solc with the right options, parse the
      result back. *)
-  let storage_contract =
-    match Compile.to_json ~filename:"storage.sol" with
-    | { Compile.contracts = [storage] } -> storage
-    | _ ->
-      failwith "More than one contract in file"
+  let solidity_output = Compile.to_json ~filename:"storage.sol"
 
   (* Extract the contract: bin is the bytecode, abi specifies how to call
-     methods from the contract. 
-  *)
-  let Compile.({ bin; abi }) = storage_contract
-
-  (* Storing a contract on-chan requires prefixing it with some specific "deploy code".
-     Think of an auto-installer. Contracts produced by solc are automatically prefixed
-     by such "deploy code", so we don't need to do anything for that.
-  *)
-
-  (* In order to deploy a contract, we need to send a specific transaction containing
-     the deployable_bin. We have to send the contract from a specific source account 
-     that is going to pay for the gas used during deployement.
-  *)
-  let deploy_tx ~(src : Types.address) ~(gas : int) ~(data : string) =
-    let open Types in
-    {
-      src;
-      dst = None;
-      gas = Some (Z.of_int gas);
-      gas_price = None;
-      value = None;
-      data;
-      nonce = None
-    }
-
-  (* open X *)
-
-  let _ =
-    if
-      Rpc.Personal.unlock_account
-        ~uri:X.uri
-        ~account:X.account
-        ~passphrase:(input_password X.account)
-        ~unlock_duration:300
-    then
-      ()
-    else
-      failwith "Could not unlock account"
-
-  (* Send the tx and get receipt: long version *)
+     methods from the contract. *)
   let deploy_receipt =
-    let transaction_hash =
-      let tx = deploy_tx ~src:X.account ~gas:999999 ~data:bin in
-      Rpc.Eth.send_transaction
-        ~uri:X.uri
-        ~transaction:tx
-    in
-    (* Get transaction receipt. This might take a while. *)
-    let rec wait () =
-      match
-        Rpc.Eth.get_transaction_receipt ~uri:X.uri ~transaction_hash
-      with
-      | None ->
-        Unix.sleep 1;
-        wait ()
-      | Some receipt -> receipt
-    in
-    wait ()
+    Compile.deploy_rpc
+      ~uri:X.uri
+      ~account:X.account
+      ~gas:(Z.of_int 9999999)
+      ~contract:solidity_output
+      ~arguments:ABI.([ Int { v = 0x123456L; t = SolidityTypes.uint_t 256 };
+                        String { v = "This is a test"; t = SolidityTypes.string_t }
+                      ])
 
-  (* This is all already neatly packed in:
-
-  let deploy_receipt =
-    Rpc.Eth.send_contract_and_get_receipt ~uri:X.uri ~src:X.account ~data:bin ~gas:999999
-
-  *)
-
+  
   (* Get the contract address on chain *)
   let storage_ctx_address =
     match deploy_receipt.Types.contract_address with
@@ -163,59 +112,58 @@ struct
      section of the transaction corresponding to the call.
   *)
 
-  let set_42_tx =
-    let uint32_t = SolidityTypes.(Tatomic (Tuint { w = Bits.int 32 })) in
-    let ABI.Method set_abi =
-      List.find (function | (ABI.Method { ABI.m_name }) -> m_name = "set"
-                          | _ -> false
-        ) abi
+  let find_method mname =
+    List.fold_left (fun acc ctx ->
+        let res = Compile.get_method ctx mname in
+        match res with
+        | None -> acc
+        | Some _ -> res
+      ) None solidity_output.contracts
+
+  let set =
+    let set_abi =
+      match find_method "set"  with
+      | None -> failwith "set method not found in solidity output"
+      | Some abi -> abi
     in
-    Compile.call_method_tx
-      ~abi:set_abi
-      ~args:[ABI.Int { v = 42L; t = uint32_t }]
-      ~src:X.account
-      ~ctx:storage_ctx_address
-      ~gas:(Z.of_int 100000)
+    fun i ->
+      let tx =
+        Compile.call_method_tx
+          ~abi:set_abi
+          ~arguments:[ABI.Int { v = i; t = SolidityTypes.uint_t 256 }]
+          ~src:X.account
+          ~ctx:storage_ctx_address
+          ~gas:(Z.of_int 99999)
+      in
+      Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx
 
-  (* Send the transaction *)
-
-  let _ = 
-    if
-      Rpc.Personal.unlock_account
-        ~uri:X.uri
-        ~account:X.account
-        ~passphrase:(input_password X.account)
-        ~unlock_duration:300
-    then
-      ()
-    else
-      failwith "Could not unlock account"
-
-  let set_42_receipt =
-    Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:set_42_tx
-
-  (* How to check that 42 has effectively been set? We need to call the method
-     get. There is a big difference here however: as get does not modify the
-     state, we don't need to issue an actual transaction on the chain. Using
-     Rpc.Eth.call, we can inspect the chain and get the result directly.
-  *)
-
-  let get_tx =
-    let ABI.Method get_abi =
-      List.find (function | (ABI.Method { ABI.m_name }) -> m_name = "get"
-                          | _ -> false
-        ) abi
+  let get =
+    let get_abi =
+      match find_method "get"  with
+      | None -> failwith "get method not found in solidity output"
+      | Some abi -> abi
     in
-    Compile.call_method_tx
-      ~abi:get_abi
-      ~args:[]
-      ~src:X.account
-      ~ctx:storage_ctx_address
-      ~gas:(Z.of_int 10000)
+    fun () ->
+      let tx =
+        Compile.call_method_tx
+          ~abi:get_abi
+          ~arguments:[]
+          ~src:X.account
+          ~ctx:storage_ctx_address
+          ~gas:(Z.of_int 99999)
+      in
+      Rpc.Eth.call ~uri:X.uri ~transaction:tx ~at_time:`latest
 
-  let get_42_result =
-    Rpc.Eth.call ~uri:X.uri ~transaction:set_42_tx ~at_time:`latest
-
-(* end *)
+  (* let _ = 
+   *   if
+   *     Rpc.Personal.unlock_account
+   *       ~uri:X.uri
+   *       ~account:X.account
+   *       ~passphrase:(input_password X.account)
+   *       ~unlock_duration:300
+   *   then
+   *     ()
+   *   else
+   *     failwith "Could not unlock account" *)
 
 end

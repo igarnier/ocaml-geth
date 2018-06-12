@@ -51,6 +51,15 @@ struct
  (* | Tdynamic_array _ *)  -> true
     | _ -> false
 
+  let uint_t w =
+    Tatomic (Tuint { w = Bits.int w })
+
+  let int_t w =
+    Tatomic (Tint { w = Bits.int w })
+
+  let string_t = Tatomic Tstring
+
+  let bytes_t = Tatomic (Tbytes { nbytes = DynamicLength })
 
 end
 
@@ -65,7 +74,15 @@ struct
 
   type abi =
     | Method of method_abi
+    | Constructor of constructor_abi
     | Event of event_abi
+
+  and constructor_abi =
+    {
+      c_inputs     : tuple_abi;
+      c_payable    : bool;
+      c_mutability : mutability;
+    }
 
   and method_abi =
     {
@@ -95,7 +112,6 @@ struct
 
   and mtype =
     | Function
-    | Constructor
     | Callback
 
   and mutability =
@@ -226,7 +242,7 @@ struct
     match t with
     | Tuint { w } ->
       if i < 0L then
-        failwith "Contract.ABI.encode: cannot encode negative integer as unsigned int"
+        failwith "encode_int: cannot encode negative integer as unsigned int"
       else
         Printf.printf "encoding uint %Ld as %s\n" i (Bitstr.(hex_as_string (uncompress (bits_of_int64 i))));
         Bitstr.(zero_pad_to ~dir:`left ~bits:(bits_of_int64 i) ~target_bits:(Bits.int 256))
@@ -352,8 +368,8 @@ struct
     | `String mtype ->
       (match mtype with
        | "function" -> `Method Function
-       | "constructor" -> `Method Constructor
        | "callback" -> `Method Callback
+       | "constructor" -> `Constructor                         
        | "event" -> `Event
        | _ ->
          failwith ("method_type_of_json: incorrect method type "^mtype)       
@@ -412,12 +428,12 @@ struct
         let fields = Json.drop_assoc method_abi in
         let m_type = assoc "type" fields |> method_type_of_json in
         match m_type with
-        | `Method Constructor ->
-          let m_inputs   = assoc "inputs" fields |> signature_of_json in
-          let m_payable  = assoc "payable" fields |> Json.drop_bool in
-          let m_mutability = assoc "stateMutability" fields |> Json.drop_string |> mutability_of_string in
-          Method {
-            m_name = ""; m_constant = false; m_inputs; m_outputs = []; m_payable; m_mutability; m_type = Constructor
+        | `Constructor ->
+          let c_inputs   = assoc "inputs" fields |> signature_of_json in
+          let c_payable  = assoc "payable" fields |> Json.drop_bool in
+          let c_mutability = assoc "stateMutability" fields |> Json.drop_string |> mutability_of_string in
+          Constructor {
+            c_inputs; c_payable; c_mutability
           }
          
         | `Method m_type ->
@@ -454,7 +470,7 @@ struct
   and solidity_contract =
     {
       contract_name : string;
-      bin           : string;
+      bin           : Bitstr.bitstring;
       abi           : ABI.abi list;
     }
 
@@ -504,6 +520,7 @@ struct
         List.map (fun (contract_name, contract_contents) ->
             let contents = Json.drop_assoc contract_contents in
             let bin = assoc "bin" contents |> Json.drop_string in
+            let bin = Bitstr.(compress (hex_of_string ("0x"^bin))) in
             let abi = assoc "abi" contents |> Json.drop_string |> Json.from_string |> ABI.from_json in
             { contract_name; bin; abi }
           ) contracts
@@ -515,56 +532,87 @@ struct
       print_string raw_jsn;
       exit 1
 
-  let deploy_rpc : uri:string -> account:Types.address -> passphrase:string -> gas:Z.t -> contract:solidity_output -> Types.transaction_receipt =
-    fun ~uri ~account ~passphrase ~gas ~contract ->
-      let unlock () =
-        if not (Rpc.Personal.unlock_account ~uri ~account ~passphrase ~unlock_duration:300) then
-          failwith "deploy_rpc: could not unlock account"
-      in
-      let deploy ctx =
-        let data =
-          "0x"^ctx.bin
-        in
-        Rpc.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ~gas
-      in
-      let rec loop ctxs =
-        match ctxs with
-        | [] ->
-          failwith "deploy_rpc: no contracts were deployable"
-        | ctx :: tl ->
-          match ctx.bin with
-          | "" -> loop tl
-          | _  ->
-            (unlock ();
-             deploy ctx)
-      in
-      loop contract.contracts
+  let get_constructor ctx =
+    let constr_abi =
+      List.fold_left (fun acc abi ->
+          match abi with
+          | ABI.Constructor cs -> Some cs
+          | _ -> acc
+        ) None ctx.abi
+    in
+    match constr_abi with
+    | None ->
+      failwith "get_constructor: constructor not found"
+    | Some cs -> cs
 
-  let call_method_tx ~(abi : ABI.method_abi) ~(args : ABI.value list) ~(src : Types.address) ~(ctx : Types.address) ~(gas : Z.t) =
+  let get_method ctx mname =
+    List.fold_left (fun acc abi ->
+        match abi with
+        | ABI.Method ms ->
+          if ms.ABI.m_name = mname then
+            Some ms
+          else
+            acc
+        | _ -> acc
+      ) None ctx.abi
+  
+  let deploy_rpc
+      ~(uri : string)
+      ~(account : Types.address)
+      ~(gas : Z.t)
+      ~(contract : solidity_output)
+      ~(arguments : ABI.value list) =
+    let prepare_constructor ctx =
+      let constr_abi = get_constructor ctx in
+      let inputs     = constr_abi.ABI.c_inputs in
+      let typechecks =
+        List.for_all2 (fun v t -> ABI.type_of v = t.ABI.arg_type) arguments inputs
+      in
+      if not typechecks then
+        failwith "deploy_rpc: constructor argument types do not match constructor declaration"
+      else
+        let encoded = ABI.(encode_value (Tuple arguments)) in
+        Bitstr.(uncompress (concat [ctx.bin; encoded]))
+    in
+    let deploy data =
+      Rpc.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ~gas
+    in
+    let rec loop ctxs =
+      match ctxs with
+      | [] ->
+        failwith "deploy_rpc: no contracts were deployable"
+      | ctx :: tl ->
+        match Bitstr.bits_as_string ctx.bin with
+        | "" -> loop tl
+        | _  ->
+          (let data = prepare_constructor ctx in
+           deploy data)
+    in
+    loop contract.contracts
+
+  let call_method_tx
+      ~(abi : ABI.method_abi)
+      ~(arguments : ABI.value list)
+      ~(src : Types.address)
+      ~(ctx : Types.address)
+      ~(gas : Z.t) =
       let mname = abi.m_name in
       let inputs = abi.ABI.m_inputs in
       let siglen = List.length inputs in
-      let arglen = List.length args in
-      if siglen = arglen then
-        let method_id = ABI.method_id abi in
-        let args      =
-          List.map2 (fun value { ABI.arg_type } ->
-              if ABI.type_of value <> arg_type then
-                failwith "call_method_tx: type mismatch"
-              else
-                ABI.encode_value value
-            ) args inputs
-        in
-        let bitstring = Bitstr.concat (method_id :: args) in
-        let data = Bitstr.(hex_as_string (uncompress bitstring)) in
-        {
-          Types.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
-        }
-      else
+      let arglen = List.length arguments in
+      if siglen <> arglen then
         let m = Printf.sprintf
             "call_method: # of arguments mismatch for method %s: %d expected vs %d actual\n" mname siglen arglen
         in
         failwith m
+      else
+        let method_id = ABI.method_id abi in
+        let encoded = ABI.(encode_value (Tuple arguments)) in        
+        let bitstring = Bitstr.concat [method_id; encoded] in
+        let data = Bitstr.(hex_as_string (uncompress bitstring)) in
+        {
+          Types.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
+        }
 
   let call_void_method_tx ~mname ~(src : Types.address) ~(ctx : Types.address) ~(gas : Z.t) =
       let method_id = ABI.keccak_4_bytes mname in

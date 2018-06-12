@@ -155,10 +155,10 @@ let log_from_json : Json.json -> log =
       in
       let log_data = assoc "data" fields |> Json.drop_string in
       let log_block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
-      let log_transaction_hash = assoc "transactionHash" fields |> Json.string |> hash256_from_string in
+      let log_transaction_hash = assoc "transactionHash" fields |> Json.drop_string |> hash256_from_string in
       let log_transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
-      let log_block_hash = assoc "blockHash" fields |> Json.string |> hash256_from_string in
-      let log_index = assoc "log_index" fields |> Json.drop_int_as_string in
+      let log_block_hash = assoc "blockHash" fields |> Json.drop_string |> hash256_from_string in
+      let log_index = assoc "logIndex" fields |> Json.drop_int_as_string in
       let log_removed = assoc "removed" fields |> Json.drop_bool in
       {
         log_address;
@@ -180,7 +180,6 @@ let receipt_from_json : Json.json -> transaction_receipt option =
     match j with
     | `Null -> None
     | `Assoc fields ->
-      begin
         let block_hash   = assoc "blockHash" fields |> Json.drop_string in
         let block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
         let contract_address =
@@ -218,7 +217,6 @@ let receipt_from_json : Json.json -> transaction_receipt option =
           transaction_hash;
           transaction_index
         }
-      end
     | _ ->
       let s = Yojson.Safe.to_string j in
       failwith ("Types.receipt_from_json: unexpected json: "^s)
