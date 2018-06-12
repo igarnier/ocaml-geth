@@ -1,3 +1,5 @@
+open Basic
+
 type bitstring = private string
 type hexstring = private string
 
@@ -14,10 +16,12 @@ val hex_as_string : hexstring -> string
 
 val bits_of_int64 : int64 -> bitstring
 val bits_of_string : string -> bitstring
+
+type pad_direction = [ `left | `right ]
   
-val bit_length : bitstring -> int
-val zero_padding : bits:bitstring -> zeroes:int -> bitstring
-val one_padding : bits:bitstring -> ones:int -> bitstring
-val zero_pad_to : bits:bitstring -> target_bits:int -> bitstring
-val one_pad_to : bits:bitstring -> target_bits:int -> bitstring
+val bit_length : bitstring -> Bits.t
+val zero_padding : dir:pad_direction -> bits:bitstring -> zeroes:Bits.t -> bitstring
+val one_padding  : dir:pad_direction -> bits:bitstring -> ones:Bits.t -> bitstring
+val zero_pad_to : dir:pad_direction -> bits:bitstring -> target_bits:Bits.t -> bitstring
+val one_pad_to : dir:pad_direction -> bits:bitstring -> target_bits:Bits.t -> bitstring
 val concat : bitstring list -> bitstring

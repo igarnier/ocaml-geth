@@ -1,5 +1,15 @@
 open Batteries
 
+module Bits = Tools.MkPrivateInt(struct end)
+module Bytes = Tools.MkPrivateInt(struct end)
+
+let bits_to_bytes (i : Bits.t) =
+  let bits = Bits.to_int i in
+  if bits mod 8 <> 0 then
+    failwith "bits_to_bytes: not a multiple of 8"
+  else
+    Bytes.int (bits / 8)
+
 type address = string
 type hash256 = string
 type hash512 = string

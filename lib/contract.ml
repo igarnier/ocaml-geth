@@ -1,4 +1,5 @@
 open Batteries
+open Basic
 
 (* https://solidity.readthedocs.io/en/develop/abi-spec.html *)
 
@@ -6,13 +7,22 @@ let assoc key fields =
   try List.assoc key fields with
   | Not_found ->
     (Printf.printf "assoc: key %s not found\n%!" key;
+     Printf.printf "available fields:\n%!";
+     List.iter (fun (field, json) ->
+         Printf.printf "%s : %s\n%!" field (Json.to_string json)
+       ) fields;
      raise Not_found)
+
 
 
 module SolidityTypes =
 struct
 
-  type bitwidth = int (* mod 8 = 0, 0 < bitwidth <= 256*)
+  type bitwidth = Bits.t (* mod 8 = 0, 0 < bitwidth <= 256*)
+
+  type length =
+    | StaticLength of Bytes.t
+    | DynamicLength
 
   type atomic =
     | Tuint of { w : bitwidth }
@@ -22,13 +32,24 @@ struct
     (* signed fixed-point decimal number of M bits, 8 <= M <= 256, M % 8 ==0, and 0 < N <= 80, which denotes the value v as v / (10 ** N). *)      
     | Tfixed of { m : bitwidth; n : bitwidth }
     | Tufixed of { m : bitwidth; n : bitwidth }
-    | Tbytes of { nbytes : int } (* 0 < #nbytes <= 32 *)
+    | Tbytes of { nbytes : length } (* 0 < #nbytes <= 32 *)
+    | Tstring      
 
   and t =
     | Tatomic of atomic
     | Tfunction
     | Tstatic_array of { numel : int; typ : t }
+    | Ttuple of t list
     (* | Tdynamic_array of { typ : t } *)
+
+  let is_dynamic t =
+    match t with
+    | Tatomic (Tbytes _)
+    | Tatomic Tstring
+    | Tstatic_array _
+    | Ttuple _
+ (* | Tdynamic_array _ *)  -> true
+    | _ -> false
 
 
 end
@@ -37,9 +58,10 @@ module ABI =
 struct
 
   type value =
-    | Int    of int64
-    | Bool   of bool
-    | String of string
+    | Int    of { v : int64; t : SolidityTypes.t }
+    | Bool   of { v : bool }
+    | String of { v : string; t : SolidityTypes.t }
+    | Tuple  of value list
 
   type abi =
     | Method of method_abi
@@ -83,6 +105,16 @@ struct
     | Payable
 
   (* -------------------------------------------------------------------------------- *)
+
+  let rec type_of value =
+    match value with
+    | Int { t } -> t
+    | Bool _ -> SolidityTypes.(Tatomic Tbool)
+    | String { t } -> t
+    | Tuple vs ->
+      SolidityTypes.Ttuple (List.map type_of vs)
+
+  (* -------------------------------------------------------------------------------- *)
   (* Encoding of types *)
 
   open Printf
@@ -92,17 +124,23 @@ struct
     match t with
     | Tatomic atomic ->
       (match atomic with
-       | Tuint { w } -> sprintf "uint%d" w
-       | Tint { w }  -> sprintf "int%d" w
+       | Tuint { w } -> sprintf "uint%d" (Bits.to_int w)
+       | Tint { w }  -> sprintf "int%d" (Bits.to_int w)
        | Taddress    -> "address"
        | Tbool       -> "bool"
-       | Tfixed { m; n }   -> sprintf "fixed%dx%d" m n
-       | Tufixed { m; n }  -> sprintf "ufixed%dx%d" m n
-       | Tbytes { nbytes } -> sprintf "bytes%d" nbytes
+       | Tfixed { m; n }   -> sprintf "fixed%dx%d" (Bits.to_int m) (Bits.to_int n)
+       | Tufixed { m; n }  -> sprintf "ufixed%dx%d" (Bits.to_int m) (Bits.to_int n)
+       | Tbytes { nbytes = StaticLength n } -> sprintf "bytes%d" (Bytes.to_int n)
+       | Tbytes { nbytes = DynamicLength } -> sprintf "bytes"
+       | Tstring -> "string"
       )
-    | Tfunction         -> "bytes24"
+    | Tfunction -> "bytes24"
     | Tstatic_array { numel; typ } ->
       sprintf "%s[%d]" (encoding_of_type typ) numel
+    | Ttuple types ->
+      let tys = List.map encoding_of_type types in
+      "("^(String.concat "," tys)^")"
+      
 
   let string_of_signature { m_name; m_inputs } =
     let types =
@@ -125,6 +163,60 @@ struct
 
   (* -------------------------------------------------------------------------------- *)
 
+  (* in bytes *)
+  let header_size value =
+    let ill_typed () =
+      failwith "header_size: ill_typed value"
+    in
+    let open SolidityTypes in
+    match value with
+    | Int { t } ->
+      (match t with
+       | Tatomic Tuint { w }
+       | Tatomic Tint { w } -> bits_to_bytes w
+       | _ -> ill_typed ())
+    | Bool _ ->
+      Bytes.int 32
+    | String { t } ->
+      (match t with
+       | Tatomic Taddress  -> bits_to_bytes (Bits.int 160)
+       | Tatomic (Tbytes { nbytes = StaticLength nbytes }) ->
+         nbytes
+       | Tatomic (Tbytes { nbytes = DynamicLength })
+       | Tatomic Tstring ->
+         bits_to_bytes (Bits.int 256)
+       | _ ->
+         ill_typed ())
+    | Tuple values ->
+      bits_to_bytes (Bits.int 256)
+
+  (* in bytes *)
+  (* let tail_size value =
+   *   match value with
+   *   | Int _ 
+   *   | Bool _ -> Bytes.int 0
+   *   | String { v } ->
+   *     (\* length (coded on 32 bytes) + data *\)
+   *     Bytes.int (32 + (String.length v))
+   *   | Tuple values ->
+   *     failwith "tail_size: can't handle tuple yet" *)
+  
+  let zero_pad_string_to_mod32 s =
+    let len = String.length s in
+    let result =
+      if len = 0 then
+        String.make 32 '\000'
+      else
+        let rem = len mod 32 in
+        if rem = 0 then
+          s
+        else
+          let pad = 32 - rem in
+          s^(String.make pad '\000')
+    in
+    Bitstr.bits_of_string result
+    
+
   (* Encoding of values *)
   let encode_int (i : int64) (t : SolidityTypes.atomic) =
     match t with
@@ -132,38 +224,113 @@ struct
       if i < 0L then
         failwith "Contract.ABI.encode: cannot encode negative integer as unsigned int"
       else
-        Bitstr.(zero_pad_to ~bits:(bits_of_int64 i) ~target_bits:256)
+        Bitstr.(zero_pad_to ~dir:`left ~bits:(bits_of_int64 i) ~target_bits:(Bits.int 256))
     | Tint { w } ->
       if i < 0L then
-        Bitstr.(one_pad_to ~bits:(bits_of_int64 i) ~target_bits:256)
+        Bitstr.(one_pad_to ~dir:`left ~bits:(bits_of_int64 i) ~target_bits:(Bits.int 256))
       else
-        Bitstr.(zero_pad_to ~bits:(bits_of_int64 i) ~target_bits:256)
+        Bitstr.(zero_pad_to ~dir:`left ~bits:(bits_of_int64 i) ~target_bits:(Bits.int 256))
     | _ ->
       failwith "encode_int: incompatible Solidity type"
-    
-  let encode_value (v : value) (t : SolidityTypes.t) =
+
+  let encode_string (s : string) ( t : SolidityTypes.atomic) =
+    match t with
+     | Taddress -> (* 160 bits *)
+       let encoded = Bitstr.compress (Bitstr.hex_of_string s) in
+       Bitstr.zero_pad_to ~dir:`left ~bits:encoded ~target_bits:(Bits.int 256)
+     | Tbytes { nbytes = (StaticLength n) } ->
+       if (Bytes.to_int n) <= 0 || (Bytes.to_int n) > 32 then
+         failwith "encode_value: Bytes type has wrong length";
+       let len = String.length s in
+       if len <> (Bytes.to_int n) then
+         failwith "encode_value: string value length mistmatch with type length";
+       zero_pad_string_to_mod32 s
+     | Tstring
+     (* We're supposed to utf8-encode [s] and then treat it as bytes. 
+        TODO: do the encoding! *)
+     | Tbytes { nbytes = DynamicLength } ->
+       let len = String.length s in
+       let len = encode_int (Int64.of_int len) (Tuint { w = Bits.int 256 }) in
+       Bitstr.concat [len; zero_pad_string_to_mod32 s]
+     | _ ->
+       failwith "encode_value: type mismatch (string)"
+
+  let rec encode_value (value : value) =
     let open SolidityTypes in
-    match v with
-    | Int i ->
+    match value with
+    | Int { v; t } ->
       (match t with
        | Tatomic atomic ->
-           encode_int i atomic
+           encode_int v atomic
        | _ ->
          failwith "encode_value: type mismatch (bool)"
       )
-    | Bool b ->
+    | Bool { v } ->
+      if v then
+        encode_int 1L (Tuint { w = Bits.int 256 })
+      else
+        encode_int 0L (Tuint { w = Bits.int 256 })
+    | String { v; t } ->
       (match t with
-       | Tatomic Tbool ->
-         encode_int 1L (Tuint { w = 32 })
-       | _ ->
-         failwith "encode_value: type mismatch (bool)")
-    | String s ->
-      (match t with
-       | Tatomic Taddress -> (* 160 bits *)
-         let encoded = Bitstr.compress (Bitstr.hex_of_string s) in
-         Bitstr.zero_pad_to ~bits:encoded ~target_bits:256
+       | Tatomic atomic ->
+         encode_string v atomic
        | _ ->
          failwith "encode_value: type mismatch (string)")
+    | Tuple values ->
+      (* compute size of header *)
+      let headsz : Bytes.t =
+        List.fold_left Bytes.(fun acc v -> acc + header_size v) (Bytes.int 0) values
+      in
+      (* convert tail values to bitstrings (possibly empty if not dynamic) *)
+      let tails   = List.map encode_tails values in
+      (* for each value, compute where its dynamic data is stored as an offset,
+         taking into account header size. *)
+      let _, offsets =
+        List.fold_left (fun (offset, acc) bitstr ->
+            let byte_len = bits_to_bytes (Bitstr.bit_length bitstr) in
+            let next_offset = Bytes.(offset + byte_len) in
+            (next_offset, offset :: acc)
+          ) (headsz, []) tails
+      in
+      let offsets = List.rev offsets in
+      let heads = List.map2 encode_heads values offsets in
+      Bitstr.concat (heads @ tails)
+      
+  and encode_heads (value : value) (offset : Bytes.t) =
+    match value with
+    | Int _
+    | Bool _ ->
+      encode_value value
+    | String { v; t } ->
+      encode_int
+        (Int64.of_int (Bytes.to_int offset))
+        (SolidityTypes.Tuint { w = Bits.int 256 })
+    | Tuple _ ->
+      failwith "encode_heads: tuple not handled yet"
+
+  and encode_tails (value : value) =
+    match value with
+    | Int _
+    | Bool _ ->
+      Bitstr.bits_of_string ""
+    | String _ ->
+      encode_value value
+    | _ ->
+      failwith ""
+      
+
+  (* let encode_list (vs : value list) (ts : SolidityTypes.t list) =
+   *   let rec loop vs ts acc =
+   *     match vs, ts with
+   *     | [], [] -> acc
+   *     | v :: vs', t :: ts' ->
+   *       let enc = encode_value v t in
+   *       let acc = failwith "" in
+   *       loop vs' ts' acc
+   *     | _ ->
+   *       failwith "encode_list: value and type list have different lengths"
+   *   in
+   *   loop vs ts (Bitstr.bits_of_string "") *)
 
   (* -------------------------------------------------------------------------------- *)
   (* Deserialization of ABIs from solc --json output *)
@@ -199,9 +366,19 @@ struct
   let type_of_json (json_type : Json.json) =
     match json_type with
     | `String s ->
+      let open SolidityTypes in
       (match s with
-       | "uint256" -> SolidityTypes.(Tatomic (Tuint { w = 256 }))
-       | "int256 " -> SolidityTypes.(Tatomic (Tint { w = 256 }))
+       | "uint8"   -> Tatomic (Tuint { w = Bits.int 8 })
+       | "uint16"   -> Tatomic (Tuint { w = Bits.int 16 })
+       | "uint32"   -> Tatomic (Tuint { w = Bits.int 32 })
+       | "uint64"   -> Tatomic (Tuint { w = Bits.int 64 })
+       | "uint128"   -> Tatomic (Tuint { w = Bits.int 128 })
+       | "uint256" -> Tatomic (Tuint { w = Bits.int 256 })
+       | "int256 " -> Tatomic (Tint { w = Bits.int 256 })
+       | "bool"    -> Tatomic Tbool
+       | "string"  -> Tatomic Tstring
+       | "bytes"   -> Tatomic (Tbytes { nbytes = DynamicLength })
+       | "address" -> Tatomic Taddress
        | _ ->
          failwith ("type_of_json: can't decode "^s)
       )
@@ -223,6 +400,14 @@ struct
         let fields = Json.drop_assoc method_abi in
         let m_type = assoc "type" fields |> method_type_of_json in
         match m_type with
+        | `Method Constructor ->
+          let m_inputs   = assoc "inputs" fields |> signature_of_json in
+          let m_payable  = assoc "payable" fields |> Json.drop_bool in
+          let m_mutability = assoc "stateMutability" fields |> Json.drop_string |> mutability_of_string in
+          Method {
+            m_name = ""; m_constant = false; m_inputs; m_outputs = []; m_payable; m_mutability; m_type = Constructor
+          }
+         
         | `Method m_type ->
           let m_name     = assoc "name" fields |> Json.drop_string in
           let m_constant = assoc "constant" fields |> Json.drop_bool in
@@ -314,38 +499,34 @@ struct
       { version; contracts }
     with
     | Not_found ->
-      Printf.printf "Error while parsing json.\n";
+      Printf.printf "to_json: error while parsing json.\n";
       print_string raw_jsn;
       exit 1
 
-  let deploy_rpc : uri:string -> account:Types.address -> passphrase:string -> gas:Z.t -> contract:solidity_output -> Types.hash256 =
+  let deploy_rpc : uri:string -> account:Types.address -> passphrase:string -> gas:Z.t -> contract:solidity_output -> Types.transaction_receipt =
     fun ~uri ~account ~passphrase ~gas ~contract ->
-      match contract.contracts with
-      | [ ctx ] ->
-        let bytecode =
-          "0x"^ctx.bin
-          |> Evm.parse_hexstring
-          |> Evm.deploy
-          |> Evm.dump
-        in
-        let open Types in
-        let transaction =
-          {
-            src = account;
-            dst = None;
-            gas = Some gas;
-            gas_price = None; (* there is a sensible default *)
-            value = None;
-            data = bytecode;
-            nonce = None
-          }
-        in
-        if Rpc.Personal.unlock_account ~uri ~account ~passphrase ~unlock_duration:300 then
-          Rpc.Eth.send_transaction ~uri ~transaction
-        else
+      let unlock () =
+        if not (Rpc.Personal.unlock_account ~uri ~account ~passphrase ~unlock_duration:300) then
           failwith "deploy_rpc: could not unlock account"
-      | _ ->
-        failwith "deploy_rpc: more than one contract in solidity_output"
+      in
+      let deploy ctx =
+        let data =
+          "0x"^ctx.bin
+        in
+        Rpc.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ~gas
+      in
+      let rec loop ctxs =
+        match ctxs with
+        | [] ->
+          failwith "deploy_rpc: no contracts were deployable"
+        | ctx :: tl ->
+          match ctx.bin with
+          | "" -> loop tl
+          | _  ->
+            (unlock ();
+             deploy ctx)
+      in
+      loop contract.contracts
 
   let call_method_tx ~(abi : ABI.method_abi) ~(args : ABI.value list) ~(src : Types.address) ~(ctx : Types.address) ~(gas : Z.t) =
       let mname = abi.m_name in
@@ -356,7 +537,10 @@ struct
         let method_id = ABI.method_id abi in
         let args      =
           List.map2 (fun value { ABI.arg_type } ->
-              ABI.encode_value value arg_type
+              if ABI.type_of value <> arg_type then
+                failwith "call_method_tx: type mismatch"
+              else
+                ABI.encode_value value
             ) args inputs
         in
         let bitstring = Bitstr.concat (method_id :: args) in

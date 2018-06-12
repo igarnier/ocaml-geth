@@ -2,7 +2,7 @@ type json = Yojson.Safe.json
 
 let hex_of_int x = Printf.sprintf "0x%x" x
 
-let hex_of_bigint x = Z.format "0x%x" x
+let hex_of_bigint x = "0x"^(Z.format "%x" x)
 
 let clean_dump json =
   Yojson.Safe.to_string json

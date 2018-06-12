@@ -1,4 +1,6 @@
 open Batteries
+
+open Basic
     
 (* Our minimal bitstring *)
 type bitstring = string
@@ -51,45 +53,59 @@ let hex_as_string x = x
 
 let bits_of_char c =
   compress (hex_of_char c)
-
+    
 let bits_of_int64 i =
   compress (hex_of_int64 i)
 
 let bits_of_string (s : string) =
   (s : bitstring)
 
-let bit_length (x : bitstring) =
-  (String.length x) * 8
+type pad_direction = [ `left | `right ]
 
-let zero_padding ~(bits : bitstring) ~(zeroes : int) =
+let bit_length (x : bitstring) =
+  Bits.int ((String.length x) * 8)
+
+let zero_padding ~(dir:pad_direction) ~(bits : bitstring) ~(zeroes : Bits.t) =
+  let zeroes = Bits.to_int zeroes in
   if zeroes mod 8 != 0 then
     failwith "Bitstr.bitstr: error, can only pad modulo 8"
   else
     let zero_chars_num = zeroes / 8 in
     let padding = String.make zero_chars_num '\x00' in
-    padding^bits
+    match dir with
+    | `left ->
+      padding^bits
+    | `right ->
+      bits^padding
 
-let one_padding ~(bits : bitstring) ~(ones : int) =
+let one_padding ~(dir:pad_direction) ~(bits : bitstring) ~(ones : Bits.t) =
+  let ones = Bits.to_int ones in
   if ones mod 8 != 0 then
     failwith "Bitstr.bitstr: error, can only pad modulo 8"
   else
     let ff_chars_num = ones / 8 in
     let padding = String.make ff_chars_num '\xff' in
-    padding^bits
+    match dir with
+    | `left ->
+      padding^bits
+    | `right ->
+      bits^padding
 
-let zero_pad_to ~(bits : bitstring) ~(target_bits : int) =
-  let len = bit_length bits in
+let zero_pad_to ~dir ~(bits : bitstring) ~(target_bits : Bits.t) =
+  let target_bits = Bits.to_int target_bits in
+  let len = Bits.to_int (bit_length bits) in
   if len >= target_bits then
     bits
   else
-    zero_padding ~bits ~zeroes:(target_bits - len)
+    zero_padding ~dir ~bits ~zeroes:(Bits.int (target_bits - len))
 
-let one_pad_to ~(bits : bitstring) ~(target_bits : int) =
-  let len = bit_length bits in
+let one_pad_to ~dir ~(bits : bitstring) ~(target_bits : Bits.t) =
+  let target_bits = Bits.to_int target_bits in
+  let len = Bits.to_int (bit_length bits) in
   if len >= target_bits then
     bits
   else
-    one_padding ~bits ~ones:(target_bits - len)
+    one_padding ~dir ~bits ~ones:(Bits.int (target_bits - len))
 
 let concat (l : bitstring list) =
   String.concat "" l
