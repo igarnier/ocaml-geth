@@ -63,11 +63,10 @@ struct
     Rpc.Personal.unlock_account ~account:X.account ~uri:"http://localhost:8545" ~passphrase ~unlock_duration:3600
 
   (* Compile solidity file using solc with the right options, parse the
-     result back. *)
+     result back. This includes the binary code of the contract and its ABI. *)
   let solidity_output = Compile.to_json ~filename:"storage.sol"
 
-  (* Extract the contract: bin is the bytecode, abi specifies how to call
-     methods from the contract. *)
+  (* Get the contract address on chain *)  
   let deploy_receipt =
     Compile.deploy_rpc
       ~uri:X.uri
@@ -77,9 +76,7 @@ struct
       ~arguments:ABI.([ Int { v = 0x123456L; t = SolidityTypes.uint_t 256 };
                         String { v = "This is a test"; t = SolidityTypes.string_t }
                       ])
-
-  
-  (* Get the contract address on chain *)
+ 
   let storage_ctx_address =
     match deploy_receipt.Types.contract_address with
     | None ->
@@ -89,28 +86,6 @@ struct
   (* --------------------------------------------------------------------- *)
   (* Calling a method from a solidity smart contract *)
   (* --------------------------------------------------------------------- *)    
-
-  (* Let's say we want to call "set" with argument data = 42. We need to
-     encode this into a transaction and send it to the contract address,
-     with enough gas for the method to complete its execution.  *)
-
-  (* The encoding takes the form enc(method_signature) enc(arguments) where
-     juxtaposition means concatenation of bitstrings and
-     1) enc(method_signature), called the "function selector", consists of 
-     the 4 first bytes of the keccak256 hash of the string representation 
-     of the signature of the method, which is here "set(uint256)", in 
-     hexadecimal notation.
-     2) enc(arguments) is specified in the solidity ABI. For unstructured
-     arguments (such as ints) it is just the hexadecimal representation.
-
-     The keccack256 hash of "set(uint256)" is 
-     "60fe47b16ed402aae66ca03d2bfc51478ee897c26a1158669c7058d5f24898f4"
-     hence enc("set(uint256)") = "60fe47b1",
-     while the argument 42 is encoded in hexadecimal as 2A, which we must 
-     0-pad to 256 bits. The encoding of calling set with argument 42 is thus
-     "0x60fe47b1000000....00002A". This string will constitute the data
-     section of the transaction corresponding to the call.
-  *)
 
   let find_method mname =
     List.fold_left (fun acc ctx ->
