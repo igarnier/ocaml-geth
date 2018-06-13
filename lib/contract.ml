@@ -58,8 +58,11 @@ struct
     Tatomic (Tint { w = Bits.int w })
 
   let string_t = Tatomic Tstring
-
+  
   let bytes_t = Tatomic (Tbytes { nbytes = DynamicLength })
+
+  let address_t = Tatomic Taddress
+ 
 
 end
 
@@ -120,6 +123,28 @@ struct
     | Nonpayable
     | Payable
 
+  (* -------------------------------------------------------------------------------- *)
+  (* Convenience functions to create ABI values *)
+
+  let int256_val (v : int64) =
+    Int { v; t = SolidityTypes.int_t 256 }
+
+  let uint256_val (v : int64) =
+    Int { v; t = SolidityTypes.uint_t 256 }
+
+  let string_val (v : string) =
+    String { v; t = SolidityTypes.string_t }
+
+  let bytes_val (v : string) =
+    String { v; t = SolidityTypes.bytes_t }
+
+  let address_val (v : Types.address) =
+    String { v = Types.address_to_string v;
+             t = SolidityTypes.address_t }
+
+  let tuple vals =
+    Tuple vals
+  
   (* -------------------------------------------------------------------------------- *)
 
   let rec type_of value =

@@ -19,7 +19,7 @@ let read_secret () =
     with _ ->
       (tcsetattr stdin TCSAFLUSH term_init;
        failwith "read_secret: readline failed")
-  in 
+  in
   tcsetattr stdin TCSAFLUSH term_init;
   password
 
