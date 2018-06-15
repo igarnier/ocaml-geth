@@ -1,4 +1,3 @@
-
 module Net :
 sig
 
@@ -38,7 +37,7 @@ sig
 
   val send_transaction : uri:string -> src:Types.address -> dst:Types.address -> value:Z.t -> src_pwd:string -> Types.hash256
   val new_account : uri:string -> passphrase:string -> Types.address
-  val unlock_account : uri:string -> account:Types.address -> passphrase:string -> unlock_duration:int -> bool
+  val unlock_account : uri:string -> account:Types.address -> passphrase:string -> unlock_duration:int -> unit
   
 end
 

@@ -1,3 +1,11 @@
+open Batteries
+
+type errmsg = { code : int; msg : string }
+
+type 'a result = ('a, errmsg) Result.t
+
+exception JsonError of errmsg
+
 type json = Yojson.Safe.json
 
 let hex_of_int x = Printf.sprintf "0x%x" x
@@ -64,32 +72,92 @@ let drop_string_list (x : json) =
   | _ ->
     failwith ("drop_string_list: bad argument "^(clean_dump x))
 
-let result (json : Yojson.Safe.json) =
-  json |> drop_assoc |> List.assoc "result"
+let parse_error (x : json) =
+  let fields = drop_assoc x in
+  let code   = List.assoc "code" fields |> drop_int in
+  let msg    = List.assoc "message" fields |> drop_string in
+  { code; msg }
 
-let bool json =
-  json |> result |> drop_bool
+module Get =
+struct
 
-let null json =
-  json |> result |> drop_null
+  let result (json : Yojson.Safe.json) =
+    let json = drop_assoc json in
+    try Ok (List.assoc "result" json)
+    with Not_found ->
+      (try
+         let errmsg = List.assoc "error" json |> parse_error in
+         Bad errmsg
+       with Not_found ->
+         failwith "Json.result: could not parse result")
 
-let int json =
-  json |> result |> drop_int
+  let bool json =
+    json |> result |> (Result.map drop_bool)
 
-let bigint json =
-  json |> result |> drop_bigint
+  let null json =
+    json |> result |> (Result.map drop_null)
 
-let int_as_string json =
-  json |> result |> drop_string |> int_of_string
+  let int json =
+    json |> result |> (Result.map drop_int)
 
-let bigint_as_string json =
-  json |> result |> drop_string |> Z.of_string
+  let bigint json =
+    json |> result |> (Result.map drop_bigint)
 
-let string json =
-  json |> result |> drop_string
+  let int_as_string json =
+    json |> result |> (Result.map (int_of_string % drop_string))
 
-let string_list json =
-  json |> result |> drop_list |> List.map drop_string
+  let bigint_as_string json =
+    json |> result |> (Result.map (Z.of_string % drop_string))
+
+  let string json =
+    json |> result |> (Result.map drop_string)
+
+  let string_list json =
+    json |> result |> (Result.map (List.map drop_string % drop_list))
+
+end
+
+module GetExn =
+struct
+
+  let result (json : Yojson.Safe.json) =
+    let json = drop_assoc json in
+    try List.assoc "result" json
+    with Not_found ->
+      (let errmsg =
+         try
+           List.assoc "error" json |> parse_error
+         with Not_found ->
+           failwith "Json.result: could not parse result"
+       in
+         raise (JsonError errmsg))
+
+  let bool json =
+    json |> result |> drop_bool
+
+  let null json =
+    json |> result |> drop_null
+
+  let int json =
+    json |> result |> drop_int
+
+  let bigint json =
+    json |> result |> drop_bigint
+
+  let int_as_string json =
+    json |> result |> (int_of_string % drop_string)
+
+  let bigint_as_string json =
+    json |> result |> (Z.of_string % drop_string)
+
+  let string json =
+    json |> result |> drop_string
+
+  let string_list json =
+    json |> result |> (List.map drop_string % drop_list)
+
+end
 
 let from_string = Yojson.Safe.from_string
 let to_string = Yojson.Safe.to_string                    
+
