@@ -244,3 +244,13 @@ struct
     rpc_call uri "admin_peers" `Null |> Get.result |> Types.peer_info_from_json
 
 end
+
+module Debug =
+struct
+
+  let dump_block ~uri ~block_number =
+    rpc_call uri "debug_dumpBlock" (`List [`String (Json.hex_of_int block_number)])
+    |> Get.result
+    |> Types.block_from_json
+  
+end

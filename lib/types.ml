@@ -120,6 +120,30 @@ type peer =
 type peer_info = peer list
 
 
+type block_info =
+  {
+    block_root     : hash256;
+    block_accounts : ba_info list
+  }
+
+and ba_info =
+  {
+    ba_account   : address;
+    ba_balance   : Z.t;
+    ba_code      : Evm.bytecode;
+    ba_code_hash : hash256;
+    ba_nonce     : int;
+    ba_root      : hash256;
+    ba_storage   : ba_storage
+  }
+
+(* The type of the data is not clear from the samples I got. It's clearly a hex string but what is
+   the max length? *)
+and ba_storage =
+  (hash256 * string) list
+
+
+
 let hex i =
   `String (Json.hex_of_int i)
 
@@ -142,7 +166,8 @@ let transaction_to_json : transaction -> Json.json =
 let assoc key fields =
   try List.assoc key fields with
   | Not_found ->
-    failwith (Printf.sprintf "assoc: key %s not found" key)
+    let json = Yojson.Safe.to_string (`Assoc fields) in
+    failwith (Printf.sprintf "assoc: key %s not found in %s" key json)
 
 let log_from_json : Json.json -> log =
   fun j ->
@@ -328,3 +353,55 @@ let peer_info_from_json : Json.json -> peer_info =
         | None     -> failwith "peer_info_from_json: can't parse peer back"
         | Some res -> res
       ) elts
+
+let _0x s = "0x"^s
+
+let block_from_json : Json.json -> block_info =
+  fun j ->
+    let fields = Json.drop_assoc j in
+    let root =
+      assoc "root" fields
+      |> Json.drop_string
+      |> _0x
+      |> hash256_from_string
+    in
+    let accounts = assoc "accounts" fields |> Json.drop_assoc in
+    let accounts =
+      ListLabels.map accounts ~f:(fun (address, json) ->
+          let fields = Json.drop_assoc json in
+          let balance = assoc "balance" fields |> Json.drop_bigint_as_string in
+          let code =
+            assoc "code" fields
+            |> Json.drop_string
+            |> _0x
+            |> Bitstr.hex_of_string
+            |> Evm.parse_hexstring
+          in
+          let code_hash =
+            assoc "codeHash" fields |> Json.drop_string |> _0x |> hash256_from_string
+          in
+          let nonce = assoc "nonce" fields |> Json.drop_int in
+          let root  =
+            assoc "root" fields |> Json.drop_string |> _0x |> hash256_from_string in
+          let storage =
+            assoc "storage" fields
+            |> Json.drop_assoc
+            |> List.map (fun (key, data) ->
+                (hash256_from_string (_0x key), Json.drop_string data)
+              )
+          in
+          {
+            ba_account = address;
+            ba_balance = balance;
+            ba_code    = code;
+            ba_code_hash = code_hash;
+            ba_nonce   = nonce;
+            ba_root    = root;
+            ba_storage = storage
+          }
+        )
+    in
+    {
+      block_root     = root;
+      block_accounts = accounts
+    }

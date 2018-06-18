@@ -22,6 +22,7 @@ val hash256_from_string : string -> hash256
 val hash512_to_string   : hash512 -> string
 val hash512_from_string : string -> hash512
 
+(** 10^18 Wei = 1 Ether. TODO: currently unused. *)
 type wei      = int
 type block_id = int
 
@@ -111,8 +112,59 @@ type peer =
 
 type peer_info = peer list
 
+type block_info =
+  {
+    block_root     : hash256;
+    block_accounts : ba_info list
+  }
+
+and ba_info =
+  {
+    ba_account   : address;
+    ba_balance   : Z.t;
+    ba_code      : Evm.bytecode;
+    ba_code_hash : hash256;
+    ba_nonce     : int;
+    ba_root      : hash256;
+    ba_storage   : ba_storage
+  }
+
+and ba_storage =
+  (hash256 * string) list
+
+(* TODO: txpool *)
+(* type txpool =
+ *   {
+ *     pending : txpool_info list;
+ *     queued : txpool_info list
+ *   }
+ * 
+ * and txpool_info =
+ *   {
+ *     (\* tx_block_hash   : hash512;
+ *      * tx_block_number : int option;
+ *      * tx_src          : address;
+ *      * dst             :  *\)
+ * 
+ *         from: "0x0216d5032f356960cd3749c31ab34eeff21b3395",
+ *         to: "0x7f69a91a3cf4be60020fb58b893b7cbb65376db8",
+ *         gas: "0x5208",
+ *         gasPrice: "0xba43b7400",
+ *         value: "0x19a99f0cf456000"
+ *         no data !
+ *         nonce: "0x326",
+ * 
+ *         blockHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
+ *         blockNumber: null,
+ *           
+ * 
+ *         hash: "0xaf953a2d01f55cfe080c0c94150a60105e8ac3d51153058a1f03dd239dd08586",
+ *         input: "0x",
+ *         transactionIndex: null,            
+ *   } *)
+
 val transaction_to_json : transaction -> Json.json
 val receipt_from_json : Json.json -> transaction_receipt option
 val node_info_from_json : Json.json -> node_info option
 val peer_info_from_json : Json.json -> peer_info
-
+val block_from_json : Json.json -> block_info

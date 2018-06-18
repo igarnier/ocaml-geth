@@ -642,11 +642,8 @@ let deploy (program : bytecode) =
   deploy_code @ program
 
 
-let parse_hexstring str =
-  if not (Bitstr.string_is_hex str) then
-    failwith "Evm.parse_hexstring: string is not 0x-prefixed hex string";
-  let stripped   = String.tail str 2 in
-  let compressed = Hex.to_string (`Hex stripped) in
+let parse_hexstring (str : Bitstr.hexstring) =
+  let compressed = Bitstr.(bits_as_string (compress str)) in
   let rec loop bc acc =
     match bc with
     | [] -> List.rev acc

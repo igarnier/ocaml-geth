@@ -60,3 +60,10 @@ sig
   val peers : uri:string -> Types.peer_info
 
 end
+
+module Debug :
+sig
+
+  val dump_block : uri:string -> block_number:int -> Types.block_info
+  
+end
