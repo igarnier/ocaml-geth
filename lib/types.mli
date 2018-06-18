@@ -27,47 +27,111 @@ type wei      = int
 type block_id = int
 
 
-type transaction =
-  {
-    src : address;
-    dst : address option;
-    gas : Z.t option;
-    gas_price : Z.t option;
-    value : Z.t option;
-    data : string;
-    nonce : int option
-  }
+(** Transactions *)
+module Tx :
+sig
+
+  type t =
+    {
+      src       : address;
+      dst       : address option;
+      gas       : Z.t option;
+      gas_price : Z.t option;
+      value     : Z.t option;
+      data      : string;
+      nonce     : int option
+    }
+
+  type receipt =
+    {
+      block_hash          : hash256;
+      block_number        : int;
+      contract_address    : address option;
+      cumulative_gas_used : Z.t;
+      src                 : address;
+      dst                 : address option;
+      gas_used            : Z.t;
+      logs                : log list;
+      (* unused:
+       * logs_bloom : string;
+       * root : string; *)
+      transaction_hash    : hash256;
+      transaction_index   : int
+    }
+
+  and log =
+    {
+      log_address           : address;
+      log_topics            : hash256 list;
+      log_data              : string; (* hex_string *)
+      log_block_number      : int;
+      log_transaction_hash  : hash256;
+      log_transaction_index : int;
+      log_block_hash        : hash256;
+      log_index             : int;
+      log_removed           : bool
+    }
+
+  val to_json : t -> Json.json
+
+  val receipt_from_json : Json.json -> receipt option    
+
+end
 
 
-type transaction_receipt =
-  {
-    block_hash          : hash256;
-    block_number        : int;
-    contract_address    : address option;
-    cumulative_gas_used : Z.t;
-    src                 : address;
-    dst                 : address option;
-    gas_used            : Z.t;
-    logs                : log list;
-    (* unused:
-     * logs_bloom : string;
-     * root : string; *)
-    transaction_hash    : hash256;
-    transaction_index   : int
-  }
+(** Blocks *)
+module Block :
+sig
 
-and log =
-  {
-    log_address           : address;
-    log_topics            : hash256 list;
-    log_data              : string; (* hex_string *)
-    log_block_number      : int;
-    log_transaction_hash  : hash256;
-    log_transaction_index : int;
-    log_block_hash        : hash256;
-    log_index             : int;
-    log_removed           : bool
-  }
+  (** Fields, extracted from the JSON RPC doc of Geth.
+    number: QUANTITY - the block number. null when its pending block.
+    hash: DATA, 32 Bytes - hash of the block. null when its pending block.
+    parentHash: DATA, 32 Bytes - hash of the parent block.
+    nonce: DATA, 8 Bytes - hash of the generated proof-of-work. null when its pending block.
+    sha3Uncles: DATA, 32 Bytes - SHA3 of the uncles data in the block.
+    logsBloom: DATA, 256 Bytes - the bloom filter for the logs of the block. null when its pending block.
+    transactionsRoot: DATA, 32 Bytes - the root of the transaction trie of the block.
+    stateRoot: DATA, 32 Bytes - the root of the final state trie of the block.
+    receiptsRoot: DATA, 32 Bytes - the root of the receipts trie of the block.
+    miner: DATA, 20 Bytes - the address of the beneficiary to whom the mining rewards were given.
+    difficulty: QUANTITY - integer of the difficulty for this block.
+    totalDifficulty: QUANTITY - integer of the total difficulty of the chain until this block.
+    extraData: DATA - the "extra data" field of this block.
+    size: QUANTITY - integer the size of this block in bytes.
+    gasLimit: QUANTITY - the maximum gas allowed in this block.
+    gasUsed: QUANTITY - the total used gas by all transactions in this block.
+    timestamp: QUANTITY - the unix timestamp for when the block was collated.
+    transactions: Array - Array of transaction objects, or 32 Bytes transaction hashes depending on the last given parameter.
+    uncles: Array - Array of uncle hashes.
+  *)
+  
+  type t =
+    {
+      number        : int64 option;
+      hash          : hash256 option;
+      parent_hash   : hash256;
+      nonce         : int64 option;
+      sha3_uncles   : hash256;
+      logs_bloom    : string option;
+      transactions_root : hash256;
+      state_root    : hash256;
+      receipts_root : hash256;
+      miner         : address;
+      difficulty    : Z.t;
+      total_difficulty : Z.t;
+      extra_data    : string;
+      size          : Z.t;
+      gas_limit     : Z.t;
+      gas_used      : Z.t;
+      timestamp     : Z.t;
+      transactions  : Tx.t list;
+      uncles        : hash256 list
+    }
+
+  val from_json : Json.json -> t
+
+end
+
 
 
 type port_info =
@@ -163,8 +227,8 @@ and ba_storage =
  *         transactionIndex: null,            
  *   } *)
 
-val transaction_to_json : transaction -> Json.json
-val receipt_from_json : Json.json -> transaction_receipt option
+(* val transaction_to_json : transaction -> Json.json *)
+(* val receipt_from_json : Json.json -> transaction_receipt option *)
 val node_info_from_json : Json.json -> node_info option
 val peer_info_from_json : Json.json -> peer_info
 val block_from_json : Json.json -> block_info

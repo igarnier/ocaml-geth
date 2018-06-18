@@ -1,3 +1,5 @@
+open Types
+
 module Net :
 sig
 
@@ -11,33 +13,34 @@ sig
 
   val protocol_version : uri:string -> int
   val syncing : uri:string -> bool
-  val coinbase : uri:string -> Types.address
+  val coinbase : uri:string -> address
   val mining : uri:string -> bool
   val hashrate : uri:string -> Z.t
   val gas_price : uri:string -> Z.t
-  val accounts : uri:string -> Types.address list
+  val accounts : uri:string -> address list
   val block_number : uri:string -> int
-  val get_balance : uri:string -> address:Types.address -> at_time:time -> Z.t
-  val get_storage_at : uri:string -> address:Types.address -> position:Z.t -> at_time:time -> string
-  val get_transaction_count : uri:string -> address:Types.address -> at_time:time -> int
-  val get_transaction_count_by_hash : uri:string -> block_hash:Types.hash256 -> int
+  val get_balance : uri:string -> address:address -> at_time:time -> Z.t
+  val get_storage_at : uri:string -> address:address -> position:Z.t -> at_time:time -> string
+  val get_transaction_count : uri:string -> address:address -> at_time:time -> int
+  val get_transaction_count_by_hash : uri:string -> block_hash:hash256 -> int
   val get_transaction_count_by_number : uri:string -> at_time:time -> int
-  val get_code : uri:string -> address:Types.address -> at_time:time -> string
-  val sign : uri:string -> address:Types.address -> message:string -> string
-  val send_transaction : uri:string -> transaction:Types.transaction -> Types.hash256
-  val send_raw_transaction : uri:string -> data:string -> Types.hash256
-  val call : uri:string -> transaction:Types.transaction -> at_time:time -> string
-  val get_transaction_receipt : uri:string -> transaction_hash:Types.hash256 -> Types.transaction_receipt option
-  val send_transaction_and_get_receipt : uri:string -> transaction:Types.transaction -> Types.transaction_receipt
-  val send_contract_and_get_receipt : uri:string -> src:Types.address -> data:Bitstr.hexstring -> gas:Z.t -> Types.transaction_receipt
+  val get_code : uri:string -> address:address -> at_time:time -> string
+  val sign : uri:string -> address:address -> message:string -> string
+  val send_transaction : uri:string -> transaction:Tx.t -> hash256
+  val send_raw_transaction : uri:string -> data:string -> hash256
+  val call : uri:string -> transaction:Tx.t -> at_time:time -> string
+  val get_transaction_receipt : uri:string -> transaction_hash:hash256 -> Tx.receipt option
+  val send_transaction_and_get_receipt : uri:string -> transaction:Tx.t -> Tx.receipt
+  val send_contract_and_get_receipt : uri:string -> src:address -> data:Bitstr.hexstring -> gas:Z.t -> Tx.receipt
+
 end
 
 module Personal :
 sig
 
-  val send_transaction : uri:string -> src:Types.address -> dst:Types.address -> value:Z.t -> src_pwd:string -> Types.hash256
-  val new_account : uri:string -> passphrase:string -> Types.address
-  val unlock_account : uri:string -> account:Types.address -> passphrase:string -> unlock_duration:int -> unit
+  val send_transaction : uri:string -> src:address -> dst:address -> value:Z.t -> src_pwd:string -> hash256
+  val new_account : uri:string -> passphrase:string -> address
+  val unlock_account : uri:string -> account:address -> passphrase:string -> unlock_duration:int -> unit
   
 end
 
@@ -47,7 +50,7 @@ sig
   val set_gas_price : uri:string -> gas_price:Z.t -> bool
   val start : uri:string -> thread_count:int -> unit
   val stop : uri:string -> bool
-  val set_ether_base : uri:string -> address:Types.address -> bool
+  val set_ether_base : uri:string -> address:address -> bool
   
 end
 

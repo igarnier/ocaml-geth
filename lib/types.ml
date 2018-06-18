@@ -13,7 +13,7 @@ let address_from_string x =
     (x : address)
 
 let hash256_to_string x = x
-  
+
 let hash256_from_string (x : string) =
   if String.length x != 66 || not (Bitstr.string_is_hex x) then
     failwith "hash256_from_string: input must be 32 bytes (64 hex chars) 0x-prefixed"
@@ -21,13 +21,13 @@ let hash256_from_string (x : string) =
     (x : hash256)
 
 let hash512_to_string x = x
-  
+
 let hash512_from_string x =
   let len = String.length x in
   if len != 130 || not (Bitstr.string_is_hex x) then
     let open Printf in
     let msg = sprintf "hash512_from_string: input must be 64 bytes (128 hex chars) 0x-prefixed.\
- Got %s, length %d instead." x len in
+                       Got %s, length %d instead." x len in
     failwith msg
   else
     (x : hash512)
@@ -36,46 +36,188 @@ let hash512_from_string x =
 type wei       = int (* Z.t ? *)
 type block_id  = int (* Z.t ? *)
 
-type transaction =
-  {
-    src : address;
-    dst : address option;
-    gas : Z.t option;
-    gas_price : Z.t option;
-    value : Z.t option;
-    data : string;
-    nonce : int option
-  }
+let hex i =
+  `String (Json.hex_of_int i)
 
-type transaction_receipt =
-  {
-    block_hash          : hash256;
-    block_number        : int;
-    contract_address    : address option;
-    cumulative_gas_used : Z.t;
-    src                 : address;
-    dst                 : address option;
-    gas_used            : Z.t;
-    logs                : log list;
-    (* unused:
-     * logs_bloom : string;
-     * root : string; *)
-    transaction_hash    : hash256;
-    transaction_index   : int
-  }
+let zhex i =
+  `String (Json.hex_of_bigint i)
 
-and log =
-  {
-    log_address           : address;
-    log_topics            : hash256 list;
-    log_data              : string; (* hex_string *)
-    log_block_number      : int;
-    log_transaction_hash  : hash256;
-    log_transaction_index : int;
-    log_block_hash        : hash256;
-    log_index             : int;
-    log_removed           : bool
-  }
+let assoc key fields =
+  try List.assoc key fields with
+  | Not_found ->
+    let json = Yojson.Safe.to_string (`Assoc fields) in
+    failwith (Printf.sprintf "assoc: key %s not found in %s" key json)
+
+module Tx =
+struct
+
+  type t =
+    {
+      src       : address;
+      dst       : address option;
+      gas       : Z.t option;
+      gas_price : Z.t option;
+      value     : Z.t option;
+      data      : string;
+      nonce     : int option
+    }
+
+
+  type receipt =
+    {
+      block_hash          : hash256;
+      block_number        : int;
+      contract_address    : address option;
+      cumulative_gas_used : Z.t;
+      src                 : address;
+      dst                 : address option;
+      gas_used            : Z.t;
+      logs                : log list;
+      (* unused:
+       * logs_bloom : string;
+       * root : string; *)
+      transaction_hash    : hash256;
+      transaction_index   : int
+    }
+
+  and log =
+    {
+      log_address           : address;
+      log_topics            : hash256 list;
+      log_data              : string; (* hex_string *)
+      log_block_number      : int;
+      log_transaction_hash  : hash256;
+      log_transaction_index : int;
+      log_block_hash        : hash256;
+      log_index             : int;
+      log_removed           : bool
+    }
+
+  let to_json (tx : t) =
+    let args =
+      [ ("from", `String (address_to_string tx.src)) ]
+      @ (match tx.dst with Some x -> [("to", `String (address_to_string x))] | _ -> [])
+      @ (match tx.gas with Some x -> [("gas", zhex x)] | _ -> [])
+      @ (match tx.gas_price with Some x -> [("gasPrice", zhex x)] | _ -> [])
+      @ (match tx.value with Some x -> [("value", zhex x)] | _ -> [])
+      @ [("data", `String tx.data)]
+      @ (match tx.nonce with Some x -> [("nonce", `Int x)] | _ -> [])
+    in
+    (`Assoc args)
+
+
+  let log_from_json json =
+    match json with
+    | `Assoc fields ->
+      let log_address = assoc "address" fields |> Json.drop_string |> address_from_string in
+      let log_topics  =
+        assoc "topics" fields |> Json.drop_list
+        |> List.map (hash256_from_string % Json.drop_string)
+      in
+      let log_data = assoc "data" fields |> Json.drop_string in
+      let log_block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
+      let log_transaction_hash = assoc "transactionHash" fields |> Json.drop_string |> hash256_from_string in
+      let log_transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
+      let log_block_hash = assoc "blockHash" fields |> Json.drop_string |> hash256_from_string in
+      let log_index = assoc "logIndex" fields |> Json.drop_int_as_string in
+      let log_removed = assoc "removed" fields |> Json.drop_bool in
+      {
+        log_address;
+        log_topics;
+        log_data;
+        log_block_number;
+        log_transaction_hash;
+        log_transaction_index;
+        log_block_hash;
+        log_index;
+        log_removed
+      }
+    | _ ->      
+      let s = Yojson.Safe.to_string json in
+      failwith ("Types.log_from_json: unexpected json: "^s)
+  
+  let receipt_from_json j =
+    match j with
+    | `Null -> None
+    | `Assoc fields ->
+      let block_hash   = assoc "blockHash" fields |> Json.drop_string in
+      let block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
+      let contract_address =
+        match assoc "contractAddress" fields with
+        | `String addr -> Some addr
+        | `Null        -> None
+        | _ ->
+          failwith "Types.receipt_from_json: unexpected result"
+      in
+      let cumulative_gas_used = assoc "cumulativeGasUsed" fields |> Json.drop_bigint_as_string in
+      let gas_used = assoc "gasUsed" fields |> Json.drop_bigint_as_string in    
+      let src = assoc "from" fields |> Json.drop_string |> address_from_string in
+      let dst =
+        match assoc "to" fields with
+        | `String addr -> Some (address_from_string addr)
+        | `Null        -> None
+        | _ ->
+          failwith "Types.receipt_from_json: unexpected result"
+      in
+      let logs = assoc "logs" fields
+                 |> Json.drop_list
+                 |> List.map log_from_json
+      in
+      let transaction_hash = assoc "transactionHash" fields |> Json.drop_string in
+      let transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
+      Some {
+        block_hash;
+        block_number;
+        contract_address;
+        cumulative_gas_used;
+        gas_used;      
+        src;
+        dst;
+        logs;
+        transaction_hash;
+        transaction_index
+      }
+    | _ ->
+      let s = Yojson.Safe.to_string j in
+      failwith ("Types.receipt_from_json: unexpected json: "^s)
+
+
+end
+
+module Block =
+struct
+  
+  type t =
+    {
+      number        : int64 option;
+      hash          : hash256 option;
+      parent_hash   : hash256;
+      nonce         : int64 option;
+      sha3_uncles   : hash256;
+      logs_bloom    : string option;
+      transactions_root : hash256;
+      state_root    : hash256;
+      receipts_root : hash256;
+      miner         : address;
+      difficulty    : Z.t;
+      total_difficulty : Z.t;
+      extra_data    : string;
+      size          : Z.t;
+      gas_limit     : Z.t;
+      gas_used      : Z.t;
+      timestamp     : Z.t;
+      transactions  : Tx.t list;
+      uncles        : hash256 list
+    }
+
+  let from_json json =
+    failwith ""
+
+end
+ 
+
+
+
 
 type port_info =
   {
@@ -84,12 +226,12 @@ type port_info =
   }
 
 type protocol_info =
-  Eth of {
-    difficulty : Z.t;
-    genesis    : hash256 option;
-    head       : hash256;
-    network    : int option
-  }
+    Eth of {
+      difficulty : Z.t;
+      genesis    : hash256 option;
+      head       : hash256;
+      network    : int option
+    }
 
 type node_info =
   {
@@ -144,107 +286,21 @@ and ba_storage =
 
 
 
-let hex i =
-  `String (Json.hex_of_int i)
 
-let zhex i =
-  `String (Json.hex_of_bigint i)
+(* let transaction_to_json : transaction -> Json.json =
+ *   fun t ->
+ *     let args =
+ *       [ ("from", `String (address_to_string t.src)) ]
+ *       @ (match t.dst with Some x -> [("to", `String (address_to_string x))] | _ -> [])
+ *       @ (match t.gas with Some x -> [("gas", zhex x)] | _ -> [])
+ *       @ (match t.gas_price with Some x -> [("gasPrice", zhex x)] | _ -> [])
+ *       @ (match t.value with Some x -> [("value", zhex x)] | _ -> [])
+ *       @ [("data", `String t.data)]
+ *       @ (match t.nonce with Some x -> [("nonce", `Int x)] | _ -> [])
+ *     in
+ *     (`Assoc args) *)
 
-let transaction_to_json : transaction -> Json.json =
-  fun t ->
-    let args =
-      [ ("from", `String (address_to_string t.src)) ]
-      @ (match t.dst with Some x -> [("to", `String (address_to_string x))] | _ -> [])
-      @ (match t.gas with Some x -> [("gas", zhex x)] | _ -> [])
-      @ (match t.gas_price with Some x -> [("gasPrice", zhex x)] | _ -> [])
-      @ (match t.value with Some x -> [("value", zhex x)] | _ -> [])
-      @ [("data", `String t.data)]
-      @ (match t.nonce with Some x -> [("nonce", `Int x)] | _ -> [])
-    in
-    (`Assoc args)
 
-let assoc key fields =
-  try List.assoc key fields with
-  | Not_found ->
-    let json = Yojson.Safe.to_string (`Assoc fields) in
-    failwith (Printf.sprintf "assoc: key %s not found in %s" key json)
-
-let log_from_json : Json.json -> log =
-  fun j ->
-    match j with
-    | `Assoc fields ->
-      let log_address = assoc "address" fields |> Json.drop_string |> address_from_string in
-      let log_topics  =
-        assoc "topics" fields |> Json.drop_list
-        |> List.map (hash256_from_string % Json.drop_string)
-      in
-      let log_data = assoc "data" fields |> Json.drop_string in
-      let log_block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
-      let log_transaction_hash = assoc "transactionHash" fields |> Json.drop_string |> hash256_from_string in
-      let log_transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
-      let log_block_hash = assoc "blockHash" fields |> Json.drop_string |> hash256_from_string in
-      let log_index = assoc "logIndex" fields |> Json.drop_int_as_string in
-      let log_removed = assoc "removed" fields |> Json.drop_bool in
-      {
-        log_address;
-        log_topics;
-        log_data;
-        log_block_number;
-        log_transaction_hash;
-        log_transaction_index;
-        log_block_hash;
-        log_index;
-        log_removed
-      }
-    | _ ->      
-      let s = Yojson.Safe.to_string j in
-      failwith ("Types.log_from_json: unexpected json: "^s)
-
-let receipt_from_json : Json.json -> transaction_receipt option =
-  fun j ->
-    match j with
-    | `Null -> None
-    | `Assoc fields ->
-        let block_hash   = assoc "blockHash" fields |> Json.drop_string in
-        let block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
-        let contract_address =
-          match assoc "contractAddress" fields with
-          | `String addr -> Some addr
-          | `Null        -> None
-          | _ ->
-            failwith "Types.receipt_from_json: unexpected result"
-        in
-        let cumulative_gas_used = assoc "cumulativeGasUsed" fields |> Json.drop_bigint_as_string in
-        let gas_used = assoc "gasUsed" fields |> Json.drop_bigint_as_string in    
-        let src = assoc "from" fields |> Json.drop_string |> address_from_string in
-        let dst =
-          match assoc "to" fields with
-          | `String addr -> Some (address_from_string addr)
-          | `Null        -> None
-          | _ ->
-            failwith "Types.receipt_from_json: unexpected result"
-        in
-        let logs = assoc "logs" fields
-                   |> Json.drop_list
-                   |> List.map log_from_json
-        in
-        let transaction_hash = assoc "transactionHash" fields |> Json.drop_string in
-        let transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
-        Some {
-          block_hash;
-          block_number;
-          contract_address;
-          cumulative_gas_used;
-          gas_used;      
-          src;
-          dst;
-          logs;
-          transaction_hash;
-          transaction_index
-        }
-    | _ ->
-      let s = Yojson.Safe.to_string j in
-      failwith ("Types.receipt_from_json: unexpected json: "^s)
 
 let port_info_from_json : Json.json -> port_info option =
   fun j ->

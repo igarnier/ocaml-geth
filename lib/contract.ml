@@ -636,14 +636,14 @@ struct
         let bitstring = Bitstr.concat [method_id; encoded] in
         let data = Bitstr.(hex_as_string (uncompress bitstring)) in
         {
-          Types.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
+          Types.Tx.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
         }
 
   let call_void_method_tx ~mname ~(src : Types.address) ~(ctx : Types.address) ~(gas : Z.t) =
       let method_id = ABI.keccak_4_bytes mname in
       let data = Bitstr.(hex_as_string (uncompress method_id)) in
       {
-        Types.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
+        Types.Tx.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
       }
 
   
