@@ -4,6 +4,17 @@ open Types
     
 module Http_client = Nethttp_client
 
+let debug_flag = ref true
+
+let switch_debug () =
+  debug_flag := not !debug_flag
+
+let print_debug s =
+  if !debug_flag then
+    print_endline s
+  else
+    ()
+
 let rpc_call uri method_name (params : Json.json) =
   let open Yojson.Safe in
   let json : Json.json =
@@ -14,7 +25,7 @@ let rpc_call uri method_name (params : Json.json) =
            ]
   in
   let data = Yojson.Safe.to_string json in
-  Printf.printf "Rpc.call: raw request =\n%s\n" data;
+  print_debug (Printf.sprintf "Rpc.call: raw request =\n%s\n" data);
   let req = new Http_client.post_raw uri data in
   req#set_req_header "Content-type" "application/json";
   let pipeline = new Http_client.pipeline in
@@ -22,19 +33,17 @@ let rpc_call uri method_name (params : Json.json) =
   (fun call -> match call#response_status with
      | `Ok -> ()
      | `Bad_request ->
-       print_endline call#response_body#value;
+       print_debug call#response_body#value;
        let j = Json.from_string call#response_body#value in
        j |> Json.drop_assoc |> List.assoc "message"
          |> Json.drop_string |> print_endline;
      | _ ->
-       print_endline call#response_status_text;
-       print_endline call#response_body#value;
-       (*print_endline "callback";*)
-       ()
+       print_debug call#response_status_text;
+       print_debug call#response_body#value
   );
   pipeline#run ();
   let (ans: string) = req#get_resp_body () in
-  print_endline ans;
+  print_debug ans;
   Json.from_string ans
 
 

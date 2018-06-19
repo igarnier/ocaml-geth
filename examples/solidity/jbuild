@@ -3,6 +3,16 @@
 (executable
   (
   (name storage)
+  (modules storage)
+  (ocamlopt_flags (-O3))
+  (libraries (batteries ocaml-geth))
+  )
+)
+
+(executable
+  (
+  (name erc20)
+  (modules erc20)   
   (ocamlopt_flags (-O3))
   (libraries (batteries ocaml-geth))
   )

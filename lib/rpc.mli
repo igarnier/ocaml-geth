@@ -1,5 +1,8 @@
 open Types
 
+val switch_debug : unit -> unit
+
+
 module Net :
 sig
 
