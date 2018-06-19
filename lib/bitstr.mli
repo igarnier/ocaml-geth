@@ -9,6 +9,7 @@ val compress : hexstring -> bitstring
 val uncompress : bitstring -> hexstring
 
 val hex_of_int : int -> hexstring
+val hex_of_bigint : Z.t -> hexstring  
 val hex_of_char : char -> hexstring
 val hex_of_int64 : int64 -> hexstring
 val hex_of_string : string -> hexstring

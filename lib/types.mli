@@ -42,15 +42,24 @@ sig
       nonce     : int option
     }
 
+  type accepted =
+    {
+      tx : t;
+      block_hash   : hash256;
+      block_number : int;
+      tx_hash      : hash256;
+      tx_index     : int
+    }
+
   type receipt =
     {
       block_hash          : hash256;
       block_number        : int;
       contract_address    : address option;
       cumulative_gas_used : Z.t;
+      gas_used            : Z.t;
       src                 : address;
       dst                 : address option;
-      gas_used            : Z.t;
       logs                : log list;
       (* unused:
        * logs_bloom : string;
@@ -71,6 +80,8 @@ sig
       log_index             : int;
       log_removed           : bool
     }
+
+  val accepted_from_json : Json.json -> accepted
 
   val to_json : t -> Json.json
 
@@ -104,13 +115,12 @@ sig
     transactions: Array - Array of transaction objects, or 32 Bytes transaction hashes depending on the last given parameter.
     uncles: Array - Array of uncle hashes.
   *)
-  
   type t =
     {
-      number        : int64 option;
+      number        : int option;
       hash          : hash256 option;
       parent_hash   : hash256;
-      nonce         : int64 option;
+      nonce         : int option;
       sha3_uncles   : hash256;
       logs_bloom    : string option;
       transactions_root : hash256;
@@ -124,7 +134,7 @@ sig
       gas_limit     : Z.t;
       gas_used      : Z.t;
       timestamp     : Z.t;
-      transactions  : Tx.t list;
+      transactions  : Tx.accepted list;
       uncles        : hash256 list
     }
 

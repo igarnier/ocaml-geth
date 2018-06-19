@@ -62,11 +62,11 @@ struct
   type time =
     [`block of int | `latest | `earliest | `pending]
 
-
   let time_to_json (at_time : time) =
     match at_time with
     | `block i  ->
-      `String (Json.hex_of_int i)
+      let s = Printf.sprintf "0x%x" i in
+      `String s
       (* let _ = failwith "TODO" in `Int i *)
     | `latest   -> `String "latest"
     | `earliest -> `String "earliest"
@@ -127,6 +127,18 @@ struct
     let params = `List [ `String (address_to_string address); time_to_json at_time ] in
     rpc_call uri "eth_getCode" params |> Get.string (* TODO: it would be nice to parse it back to bytecode *)
 
+  let get_block_by_hash ~uri ~block_hash =
+    let params = `List [ `String (hash256_to_string block_hash) ] in
+    rpc_call uri "eth_getBlockByHash" params
+    |> Get.result
+    |> Json.maybe Block.from_json
+
+  let get_block_by_number ~uri ~at_time =
+    let params = `List [ time_to_json at_time; `Bool true ] in
+    rpc_call uri "eth_getBlockByNumber" params
+    |> Get.result
+    |> Json.maybe Block.from_json
+  
   let sign ~uri ~address ~message =
     rpc_call uri "eth_sign" (`List [`String (address_to_string address); `String message]) |> Get.string
 
@@ -182,7 +194,8 @@ module Personal =
 struct
 
   let send_transaction ~uri ~src ~dst ~value ~src_pwd =
-    let value = Json.hex_of_bigint value in
+    (* let value = Bitstr.(hex_as_string (hex_of_bigint value)) in *)
+    let value = Z.format "0x%x" value in
     let args  =
         `List [`Assoc [ ("from", `String (address_to_string src));
                         ("to", `String (address_to_string dst));
@@ -212,7 +225,8 @@ module Miner =
 struct
 
   let set_gas_price ~uri ~gas_price =
-    let args = `String (Json.hex_of_bigint gas_price) in
+    let value = Z.format "0x%x" gas_price in
+    let args = `String value in
     rpc_call uri "miner_setGasPrice" (`List [args]) |> Get.bool
 
   let start ~uri ~thread_count =
@@ -249,7 +263,8 @@ module Debug =
 struct
 
   let dump_block ~uri ~block_number =
-    rpc_call uri "debug_dumpBlock" (`List [`String (Json.hex_of_int block_number)])
+    let bnum = Printf.sprintf "0x%x" block_number in
+    rpc_call uri "debug_dumpBlock" (`List [`String bnum])
     |> Get.result
     |> Types.block_from_json
   

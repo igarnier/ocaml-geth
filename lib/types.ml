@@ -37,10 +37,10 @@ type wei       = int (* Z.t ? *)
 type block_id  = int (* Z.t ? *)
 
 let hex i =
-  `String (Json.hex_of_int i)
+  `String Bitstr.(hex_as_string (hex_of_int i))
 
 let zhex i =
-  `String (Json.hex_of_bigint i)
+  `String Bitstr.(hex_as_string (hex_of_bigint i))
 
 let assoc key fields =
   try List.assoc key fields with
@@ -50,7 +50,7 @@ let assoc key fields =
 
 module Tx =
 struct
-
+  
   type t =
     {
       src       : address;
@@ -62,16 +62,24 @@ struct
       nonce     : int option
     }
 
-
+  type accepted =
+    {
+      tx : t;
+      block_hash   : hash256;
+      block_number : int;
+      tx_hash      : hash256;
+      tx_index     : int
+    }
+    
   type receipt =
     {
       block_hash          : hash256;
       block_number        : int;
       contract_address    : address option;
       cumulative_gas_used : Z.t;
+      gas_used            : Z.t;
       src                 : address;
       dst                 : address option;
-      gas_used            : Z.t;
       logs                : log list;
       (* unused:
        * logs_bloom : string;
@@ -105,22 +113,54 @@ struct
     in
     (`Assoc args)
 
+  let accepted_from_json json =
+    let fields = Json.drop_assoc json in
+    let table  = Hashtbl.of_list fields in
+    let find   = Hashtbl.find table in
+    let src    = find "from"     |> Json.(address_from_string % drop_string) in
+    let dst    = find "to"       |> Json.(address_from_string % drop_string) in
+    let gas    = find "gas"      |> Json.drop_bigint_as_string in
+    let gasprc = find "gasPrice" |> Json.drop_bigint_as_string in
+    let value  = find "value"    |> Json.drop_bigint_as_string in
+    let input  = find "input"    |> Json.drop_string in
+    let nonce  = find "nonce"    |> Json.drop_int in
+    let blkhsh = find "blockHash"   |> Json.(hash256_from_string % drop_string) in
+    let blknmb = find "blockNumber" |> Json.drop_int in
+    let txhash = find "hash"        |> Json.(hash256_from_string % drop_string) in
+    let txindx = find "transactionIndex" |> Json.drop_int in
+    {
+      tx =
+        {
+          src;
+          dst = Some dst;
+          gas = Some gas;
+          gas_price = Some gasprc;
+          value = Some value;
+          data = input;
+          nonce = Some nonce
+        };
+
+      block_hash = blkhsh;
+      block_number = blknmb;
+      tx_hash = txhash;
+      tx_index = txindx
+    }
+
 
   let log_from_json json =
     match json with
     | `Assoc fields ->
-      let log_address = assoc "address" fields |> Json.drop_string |> address_from_string in
-      let log_topics  =
-        assoc "topics" fields |> Json.drop_list
-        |> List.map (hash256_from_string % Json.drop_string)
-      in
-      let log_data = assoc "data" fields |> Json.drop_string in
-      let log_block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
-      let log_transaction_hash = assoc "transactionHash" fields |> Json.drop_string |> hash256_from_string in
-      let log_transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
-      let log_block_hash = assoc "blockHash" fields |> Json.drop_string |> hash256_from_string in
-      let log_index = assoc "logIndex" fields |> Json.drop_int_as_string in
-      let log_removed = assoc "removed" fields |> Json.drop_bool in
+      let table = Hashtbl.of_list fields in
+      let find  = Hashtbl.find table in
+      let log_address = find "address" |> Json.drop_string |> address_from_string in
+      let log_topics  = find "topics"  |> Json.drop_list |> List.map (hash256_from_string % Json.drop_string) in
+      let log_data    = find "data"    |> Json.drop_string in
+      let log_block_number = find "blockNumber" |> Json.drop_int_as_string in
+      let log_transaction_hash = find "transactionHash" |> Json.drop_string |> hash256_from_string in
+      let log_transaction_index = find "transactionIndex" |> Json.drop_int_as_string in
+      let log_block_hash = find "blockHash" |> Json.drop_string |> hash256_from_string in
+      let log_index = find "logIndex" |> Json.drop_int_as_string in
+      let log_removed = find "removed" |> Json.drop_bool in
       {
         log_address;
         log_topics;
@@ -189,10 +229,10 @@ struct
   
   type t =
     {
-      number        : int64 option;
+      number        : int option;
       hash          : hash256 option;
       parent_hash   : hash256;
-      nonce         : int64 option;
+      nonce         : int option;
       sha3_uncles   : hash256;
       logs_bloom    : string option;
       transactions_root : hash256;
@@ -206,12 +246,54 @@ struct
       gas_limit     : Z.t;
       gas_used      : Z.t;
       timestamp     : Z.t;
-      transactions  : Tx.t list;
+      transactions  : Tx.accepted list;
       uncles        : hash256 list
     }
 
   let from_json json =
-    failwith ""
+    let fields   = Json.drop_assoc json in
+    let table    = Hashtbl.of_list fields in
+    let find     = Hashtbl.find table in
+    let number   = find "number"           |> Json.(maybe drop_int_as_string) in
+    let hash     = find "hash"             |> Json.(maybe (hash256_from_string % drop_string)) in
+    let p_hash   = find "parentHash"       |> Json.(hash256_from_string % drop_string) in
+    let nonce    = find "nonce"            |> Json.(maybe drop_int) in
+    let sha3unc  = find "sha3Uncles"       |> Json.(hash256_from_string % drop_string) in
+    let logsblm  = find "logsBloom"        |> Json.(maybe drop_string) in
+    let txs_root = find "transactionsRoot" |> Json.(hash256_from_string % drop_string) in
+    let st_root  = find "stateRoot"        |> Json.(hash256_from_string % drop_string) in
+    let rc_root  = find "receiptsRoot"     |> Json.(hash256_from_string % drop_string) in
+    let miner    = find "miner"            |> Json.(address_from_string % drop_string) in
+    let diff     = find "difficulty"       |> Json.drop_bigint_as_string in
+    let totdiff  = find "totalDifficulty"  |> Json.drop_bigint_as_string in
+    let ex_data  = find "extraData"        |> Json.drop_string in
+    let size     = find "size"             |> Json.drop_bigint_as_string in
+    let gas_lim  = find "gasLimit"         |> Json.drop_bigint_as_string in
+    let gas_used = find "gasUsed"          |> Json.drop_bigint_as_string in
+    let tstamp   = find "timestamp"        |> Json.drop_bigint_as_string in
+    let txs      = find "transactions"     |> Json.drop_list |> List.map Tx.accepted_from_json in
+    let uncles   = find "uncles"           |> Json.drop_list |> List.map Json.(hash256_from_string % drop_string) in
+    {
+      number;
+      hash;
+      parent_hash = p_hash;
+      nonce;
+      sha3_uncles = sha3unc;
+      logs_bloom  = logsblm;
+      transactions_root = txs_root;
+      state_root = st_root;
+      receipts_root = rc_root;
+      miner;
+      difficulty = diff;
+      total_difficulty = totdiff;
+      extra_data = ex_data;
+      size;
+      gas_limit = gas_lim;
+      gas_used;
+      timestamp = tstamp;
+      transactions = txs;
+      uncles            
+    }
 
 end
  

@@ -8,12 +8,17 @@ exception JsonError of errmsg
 
 type json = Yojson.Safe.json
 
-let hex_of_int x = Printf.sprintf "0x%x" x
-
-let hex_of_bigint x = "0x"^(Z.format "%x" x)
+(* let hex_of_int x = Printf.sprintf "0x%x" x
+ * 
+ * let hex_of_bigint x = "0x"^(Z.format "%x" x) *)
 
 let clean_dump json =
   Yojson.Safe.to_string json
+
+let maybe f =
+  fun x ->
+    try Some (f x)
+    with (Failure _) -> None
 
 let drop_assoc (x : json) =
   match x with
@@ -32,7 +37,10 @@ let drop_int (x : json) =
   | `Int n -> n
   | _ ->
     failwith ("drop_int: bad argument "^(clean_dump x))
-      
+
+let drop_int64 (x : json) =
+  Int64.of_int (drop_int x)
+  
 let drop_bigint (x : json) =
   match x with
   | `Intlit n -> Z.of_string n
@@ -58,6 +66,11 @@ let drop_null (x : json) =
 let drop_int_as_string (x : json) =
   match x with
   | `String n -> int_of_string n
+  | _ -> failwith ("drop_int_as_string: bad argument "^(clean_dump x))
+
+let drop_int64_as_string (x : json) =
+  match x with
+  | `String n -> Int64.of_int (int_of_string n)
   | _ -> failwith ("drop_int_as_string: bad argument "^(clean_dump x))
 
 let drop_bigint_as_string (x : json) =
@@ -122,7 +135,8 @@ struct
 
   let result (json : Yojson.Safe.json) =
     let json = drop_assoc json in
-    try List.assoc "result" json
+    try
+      List.assoc "result" json
     with Not_found ->
       (let errmsg =
          try
@@ -130,7 +144,7 @@ struct
          with Not_found ->
            failwith "Json.result: could not parse result"
        in
-         raise (JsonError errmsg))
+       raise (JsonError errmsg))
 
   let bool json =
     json |> result |> drop_bool
@@ -158,6 +172,6 @@ struct
 
 end
 
-let from_string = Yojson.Safe.from_string
-let to_string = Yojson.Safe.to_string                    
+let from_string x = Yojson.Safe.from_string x
+let to_string x = Yojson.Safe.to_string x
 

@@ -25,6 +25,8 @@ sig
   val get_transaction_count_by_hash : uri:string -> block_hash:hash256 -> int
   val get_transaction_count_by_number : uri:string -> at_time:time -> int
   val get_code : uri:string -> address:address -> at_time:time -> string
+  val get_block_by_hash : uri:string -> block_hash:hash256 -> Block.t option
+  val get_block_by_number : uri:string -> at_time:time -> Block.t option
   val sign : uri:string -> address:address -> message:string -> string
   val send_transaction : uri:string -> transaction:Tx.t -> hash256
   val send_raw_transaction : uri:string -> data:string -> hash256

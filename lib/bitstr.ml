@@ -44,6 +44,13 @@ let hex_of_int i =
     "0x"^hexstr
   else
     "0x0"^hexstr
+
+let hex_of_bigint (z : Z.t) =
+  let hexstr = Z.format "%x" z in
+  if String.length hexstr mod 2 = 0 then
+    "0x"^hexstr
+  else
+    "0x0"^hexstr
     
 let hex_of_char c =
   hex_of_int (Char.code c)
