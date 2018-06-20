@@ -36,11 +36,6 @@ let hash512_from_string x =
 type wei       = int (* Z.t ? *)
 type block_id  = int (* Z.t ? *)
 
-let hex i =
-  `String Bitstr.(hex_as_string (hex_of_int i))
-
-let zhex i =
-  `String Bitstr.(hex_as_string (hex_of_bigint i))
 
 let assoc key fields =
   try List.assoc key fields with
@@ -105,9 +100,9 @@ struct
     let args =
       [ ("from", `String (address_to_string tx.src)) ]
       @ (match tx.dst with Some x -> [("to", `String (address_to_string x))] | _ -> [])
-      @ (match tx.gas with Some x -> [("gas", zhex x)] | _ -> [])
-      @ (match tx.gas_price with Some x -> [("gasPrice", zhex x)] | _ -> [])
-      @ (match tx.value with Some x -> [("value", zhex x)] | _ -> [])
+      @ (match tx.gas with Some x -> [("gas", Json.zhex x)] | _ -> [])
+      @ (match tx.gas_price with Some x -> [("gasPrice", Json.zhex x)] | _ -> [])
+      @ (match tx.value with Some x -> [("value", Json.zhex x)] | _ -> [])
       @ [("data", `String tx.data)]
       @ (match tx.nonce with Some x -> [("nonce", `Int x)] | _ -> [])
     in

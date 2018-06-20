@@ -6,6 +6,10 @@ exception JsonError of errmsg
 
 type json = Yojson.Safe.json
 
+val hex : int -> json
+
+val zhex : Z.t -> json
+
 val maybe : (json -> 'a) -> json -> 'a option
 
 val drop_assoc : json -> (string * json) list

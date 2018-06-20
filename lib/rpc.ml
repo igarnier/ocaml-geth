@@ -204,11 +204,10 @@ struct
 
   let send_transaction ~uri ~src ~dst ~value ~src_pwd =
     (* let value = Bitstr.(hex_as_string (hex_of_bigint value)) in *)
-    let value = Z.format "0x%x" value in
     let args  =
         `List [`Assoc [ ("from", `String (address_to_string src));
                         ("to", `String (address_to_string dst));
-                        ("value", `String value) ];
+                        ("value", Json.zhex value) ];
                `String src_pwd
               ]
     in
@@ -234,9 +233,7 @@ module Miner =
 struct
 
   let set_gas_price ~uri ~gas_price =
-    let value = Z.format "0x%x" gas_price in
-    let args = `String value in
-    rpc_call uri "miner_setGasPrice" (`List [args]) |> Get.bool
+    rpc_call uri "miner_setGasPrice" (`List [ Json.zhex gas_price ]) |> Get.bool
 
   let start ~uri ~thread_count =
     let args = `Int thread_count in

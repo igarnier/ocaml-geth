@@ -8,6 +8,12 @@ exception JsonError of errmsg
 
 type json = Yojson.Safe.json
 
+let hex i =
+  `String (Printf.sprintf "0x%x" i)
+
+let zhex i =
+  `String ("0x"^(Z.format "%x" i))
+
 (* let hex_of_int x = Printf.sprintf "0x%x" x
  * 
  * let hex_of_bigint x = "0x"^(Z.format "%x" x) *)
