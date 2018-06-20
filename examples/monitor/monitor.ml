@@ -30,12 +30,6 @@ let poll_new_block uri state =
          }
     )
 
-let default_action block =
-  Printf.printf "block #%s, #tx %d, tstamp %s\n%!"
-    Option.(map_default string_of_int "pending" block.Block.number)
-    (List.length block.Block.transactions)
-    (Z.to_string block.Block.timestamp)
-
 let process_action action_table new_block =
   let rec loop action_table =
     match action_table with
@@ -48,16 +42,22 @@ let process_action action_table new_block =
   in
   loop action_table
     
-let rec pool_loop period uri state action_table =
+let rec iter_blocks period uri state f =
   match poll_new_block uri state with
   | None ->
     Unix.sleepf period;
-    pool_loop period uri state action_table
+    iter_blocks period uri state f
   | Some ({ blocks = new_block :: _ } as new_state) ->
-    process_action action_table new_block;
-    pool_loop period uri new_state action_table
+    f new_block;
+    iter_blocks period uri new_state f
   | _ ->
     failwith "poll_loop: impossible state reached!?"
+
+let default_action block =
+  Printf.printf "block #%s, #tx %d, tstamp %s\n%!"
+    Option.(map_default string_of_int "pending" block.Block.number)
+    (List.length block.Block.transactions)
+    (Z.to_string block.Block.timestamp)
 
 let _ =
   let uri      = "http://localhost:8545" in
@@ -68,4 +68,4 @@ let _ =
       blocks       = []
     }
   in
-  pool_loop 0.5 uri state [ (fun _ -> true), default_action ]
+  iter_blocks 0.5 uri state default_action
