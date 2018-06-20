@@ -78,7 +78,7 @@ struct
                       ])
  
   let storage_ctx_address =
-    match deploy_receipt.Types.contract_address with
+    match deploy_receipt.Types.Tx.contract_address with
     | None ->
       failwith "could not get contract address from deploy receipt"
     | Some addr -> addr
