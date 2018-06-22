@@ -20,4 +20,5 @@ contract Storage {
   function get() constant returns (uint256) {
     return storedData;
   }
+
 }

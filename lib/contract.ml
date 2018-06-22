@@ -295,9 +295,14 @@ struct
      (* We're supposed to utf8-encode [s] and then treat it as bytes. 
         TODO: do the encoding! *)
      | Tbytes { nbytes = DynamicLength } ->
-       let len = String.length s in
-       let len = encode_int (Int64.of_int len) (Tuint { w = Bits.int 256 }) in
-       Bitstr.concat [len; zero_pad_string_to_mod32 s]
+       let len  = String.length s in
+       let elen = encode_int (Int64.of_int len) (Tuint { w = Bits.int 256 }) in
+       Printf.printf "encoding string of length %d: encoding of length=%s, string = %s\n"
+         len
+         Bitstr.(hex_as_string (uncompress elen))
+         Bitstr.(hex_as_string (uncompress (zero_pad_string_to_mod32 s))) 
+         ;
+       Bitstr.concat [elen; zero_pad_string_to_mod32 s]
      | _ ->
        failwith "encode_string: type mismatch (string)"
 

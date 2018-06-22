@@ -56,7 +56,7 @@ module Storage
        val uri     : string
 
      end) =
-struct  
+struct
 
   let _ =
     let passphrase = input_password X.account in
@@ -66,12 +66,12 @@ struct
      result back. This includes the binary code of the contract and its ABI. *)
   let solidity_output = Compile.to_json ~filename:"storage.sol"
 
-  (* Get the contract address on chain *)  
+  (* Get the contract address on chain *)
   let deploy_receipt =
     Compile.deploy_rpc
       ~uri:X.uri
       ~account:X.account
-      ~gas:(Z.of_int 9999999)
+      ~gas:(Z.of_int 175000)
       ~contract:solidity_output
       ~arguments:ABI.([ Int { v = 0x123456L; t = SolidityTypes.uint_t 256 };
                         String { v = "This is a test"; t = SolidityTypes.string_t }
@@ -91,7 +91,7 @@ struct
     List.fold_left (fun acc ctx ->
         let res = Compile.get_method ctx mname in
         match res with
-        | None -> acc
+        | None   -> acc
         | Some _ -> res
       ) None solidity_output.contracts
 
@@ -142,3 +142,20 @@ struct
    *     failwith "Could not unlock account" *)
 
 end
+
+module X =
+struct
+  let account = Types.address_from_string "0x0cb903d0139c1322a52f70038332efd363f94ea8"
+  let uri     = "http://localhost:8545"
+end
+
+module S = Storage(X)
+
+let _ =
+  Printf.printf "%s\n" (Types.address_to_string S.storage_ctx_address)
+
+
+let result = S.set 12345L
+
+let result =
+  Printf.printf "result: %s\n" (S.get ())

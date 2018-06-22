@@ -61,13 +61,13 @@ struct
         Compile.deploy_rpc
           ~uri:X.uri
           ~account:X.account
-          ~gas:(Z.of_int 9999999)
+          ~gas:(Z.of_int 999999)
           ~contract:solidity_output
           ~arguments:ABI.([ uint256_val initial_supply;
                             string_val token_name;
                             string_val token_symbol ])
       in
-      (match deploy_receipt.Types.contract_address with
+      (match deploy_receipt.Types.Tx.contract_address with
        | None ->
          failwith "could not get contract address from deploy receipt"
        | Some addr -> addr)
@@ -89,7 +89,7 @@ struct
      * @param _to The address of the recipient
      * @param _value the amount to send
     *)  
-  let transfer : Types.address -> int64 -> Types.transaction_receipt =
+  let transfer : Types.address -> int64 -> Types.Tx.receipt =
     let transfer_abi =
       match find_method "transfer"  with
       | None -> failwith "transfer method not found in solidity output"
@@ -106,7 +106,7 @@ struct
                             uint256_val value
                           ])
       in
-      Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx      
+      Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx
 
     (**
      * Transfer tokens from other address
@@ -117,7 +117,7 @@ struct
      * @param dst The address of the recipient
      * @param value the amount to send
      *)
-  let transfer_from : Types.address -> Types.address -> int64 -> Types.transaction_receipt =
+  let transfer_from : Types.address -> Types.address -> int64 -> Types.Tx.receipt =
     let transfer_from_abi =
       match find_method "transferFrom"  with
       | None -> failwith "transferFrom method not found in solidity output"
@@ -145,7 +145,7 @@ struct
    * @param spender The address authorized to spend
    * @param value the max amount they can spend
    *)
-  let approve : Types.address -> int64 -> Types.transaction_receipt =
+  let approve : Types.address -> int64 -> Types.Tx.receipt =
     let approve_abi =
       match find_method "approve"  with
       | None -> failwith "approve method not found in solidity output"
@@ -164,16 +164,16 @@ struct
       in
       Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx      
 
-    (**
-     * Set allowance for other address and notify
-     *
-     * Allows `spender` to spend no more than `value` tokens on your behalf, and then ping the contract about it
-     *
-     * @param spender The address authorized to spend
-     * @param value the max amount they can spend
-     * @param extra_data some extra information to send to the approved contract
-    *)
-  let approve_and_call : Types.address -> int64 -> string -> Types.transaction_receipt =
+  (**
+   * Set allowance for other address and notify
+   *
+   * Allows `spender` to spend no more than `value` tokens on your behalf, and then ping the contract about it
+   *
+   * @param spender The address authorized to spend
+   * @param value the max amount they can spend
+   * @param extra_data some extra information to send to the approved contract
+  *)
+  let approve_and_call : Types.address -> int64 -> string -> Types.Tx.receipt =
     let approve_and_call_abi =
       match find_method "approveAndCall"  with
       | None -> failwith "approveAndCall method not found in solidity output"
@@ -219,7 +219,7 @@ struct
    *
    * @param value the amount of money to burn
   *)
-  let burn : int64 -> Types.transaction_receipt =
+  let burn : int64 -> Types.Tx.receipt =
     let burn_abi =
       match find_method "burn"  with
       | None -> failwith "burn method not found in solidity output"
@@ -244,7 +244,7 @@ struct
      * @param from the address of the sender
      * @param value the amount of money to burn
     *)
-  let burn_from : Types.address -> int64 -> Types.transaction_receipt =
+  let burn_from : Types.address -> int64 -> Types.Tx.receipt =
     let burn_from_abi =
       match find_method "burnFrom"  with
       | None -> failwith "burnFrom method not found in solidity output"
