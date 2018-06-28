@@ -81,14 +81,14 @@ struct
         | Some _ -> res
       ) None solidity_output.contracts
 
-    (**
-     * Transfer tokens
-     *
-     * Send `value` tokens to `dst` from your account
-     *
-     * @param _to The address of the recipient
-     * @param _value the amount to send
-    *)  
+  (**
+   * Transfer tokens
+   *
+   * Send `value` tokens to `dst` from your account
+   *
+   * @param _to The address of the recipient
+   * @param _value the amount to send
+  *)  
   let transfer : Types.address -> int64 -> Types.Tx.receipt =
     let transfer_abi =
       match find_method "transfer"  with
@@ -96,27 +96,25 @@ struct
       | Some abi -> abi
     in
     fun dst value ->
-      let tx =
-        Compile.call_method_tx
-          ~abi:transfer_abi
-          ~src:X.account
-          ~ctx:ctx_address
-          ~gas:(Z.of_int 99999)
-          ~arguments:ABI.([ address_val dst;
-                            uint256_val value
-                          ])
-      in
-      Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx
+      Compile.execute_method
+        ~uri:X.uri
+        ~abi:transfer_abi
+        ~src:X.account
+        ~ctx:ctx_address
+        ~gas:(Z.of_int 99999)
+        ~arguments:ABI.([ address_val dst;
+                          uint256_val value
+                        ])
 
-    (**
-     * Transfer tokens from other address
-     *
-     * Send `value` tokens to `dst` on behalf of `src`
-     *
-     * @param src The address of the sender
-     * @param dst The address of the recipient
-     * @param value the amount to send
-     *)
+  (**
+   * Transfer tokens from other address
+   *
+   * Send `value` tokens to `dst` on behalf of `src`
+   *
+   * @param src The address of the sender
+   * @param dst The address of the recipient
+   * @param value the amount to send
+  *)
   let transfer_from : Types.address -> Types.address -> int64 -> Types.Tx.receipt =
     let transfer_from_abi =
       match find_method "transferFrom"  with
@@ -124,18 +122,16 @@ struct
       | Some abi -> abi
     in
     fun src dst value ->
-      let tx =
-        Compile.call_method_tx
-          ~abi:transfer_from_abi
-          ~src:X.account
-          ~ctx:ctx_address
-          ~gas:(Z.of_int 99999)
-          ~arguments:ABI.([ address_val src;
-                            address_val dst;
-                            uint256_val value
-                          ])
-      in
-      Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx      
+      Compile.execute_method
+        ~uri:X.uri
+        ~abi:transfer_from_abi
+        ~src:X.account
+        ~ctx:ctx_address
+        ~gas:(Z.of_int 99999)
+        ~arguments:ABI.([ address_val src;
+                          address_val dst;
+                          uint256_val value
+                        ])
 
   (**
    * Set allowance for other address
@@ -144,7 +140,7 @@ struct
    *
    * @param spender The address authorized to spend
    * @param value the max amount they can spend
-   *)
+  *)
   let approve : Types.address -> int64 -> Types.Tx.receipt =
     let approve_abi =
       match find_method "approve"  with
@@ -152,17 +148,15 @@ struct
       | Some abi -> abi
     in
     fun spender value ->
-      let tx =
-        Compile.call_method_tx
-          ~abi:approve_abi
-          ~src:X.account
-          ~ctx:ctx_address
-          ~gas:(Z.of_int 99999)
-          ~arguments:ABI.([ address_val spender;
-                            uint256_val value
-                          ])
-      in
-      Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx      
+      Compile.execute_method
+        ~uri:X.uri
+        ~abi:approve_abi
+        ~src:X.account
+        ~ctx:ctx_address
+        ~gas:(Z.of_int 99999)
+        ~arguments:ABI.([ address_val spender;
+                          uint256_val value
+                        ])
 
   (**
    * Set allowance for other address and notify
@@ -180,18 +174,16 @@ struct
       | Some abi -> abi
     in
     fun spender value extra_data ->
-      let tx =
-        Compile.call_method_tx
-          ~abi:approve_and_call_abi
-          ~src:X.account
-          ~ctx:ctx_address
-          ~gas:(Z.of_int 99999)
-          ~arguments:ABI.([ address_val spender;
-                            uint256_val value;
-                            bytes_val extra_data
-                          ])
-      in
-      Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx      
+      Compile.execute_method
+        ~uri:X.uri
+        ~abi:approve_and_call_abi
+        ~src:X.account
+        ~ctx:ctx_address
+        ~gas:(Z.of_int 99999)
+        ~arguments:ABI.([ address_val spender;
+                          uint256_val value;
+                          bytes_val extra_data
+                        ])
 
   (** Get balance. The account [src] must be authentitcated before calling this
       function. *)
@@ -202,15 +194,13 @@ struct
       | Some abi -> abi
     in
     fun src ->
-      let tx =
-        Compile.call_method_tx
-          ~abi:get_balance_abi
-          ~arguments:[]
-          ~src
-          ~ctx:ctx_address
-          ~gas:(Z.of_int 99999)
-      in
-      Rpc.Eth.call ~uri:X.uri ~transaction:tx ~at_time:`latest
+      Compile.call_method
+        ~uri:X.uri
+        ~abi:get_balance_abi
+        ~arguments:[]
+        ~src
+        ~ctx:ctx_address
+        ~gas:(Z.of_int 99999)
 
   (**
    * Destroy tokens
@@ -221,29 +211,27 @@ struct
   *)
   let burn : int64 -> Types.Tx.receipt =
     let burn_abi =
-      match find_method "burn"  with
+      match find_method "burn" with
       | None -> failwith "burn method not found in solidity output"
       | Some abi -> abi
     in
     fun value ->
-      let tx =
-        Compile.call_method_tx
-          ~abi:burn_abi
-          ~src:X.account
-          ~ctx:ctx_address
-          ~gas:(Z.of_int 99999)
-          ~arguments:ABI.([ uint256_val value ])
-      in
-      Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx      
+      Compile.execute_method
+        ~uri:X.uri
+        ~abi:burn_abi
+        ~src:X.account
+        ~ctx:ctx_address
+        ~gas:(Z.of_int 99999)
+        ~arguments:ABI.([ uint256_val value ])
 
-    (**
-     * Destroy tokens from other account
-     *
-     * Remove `value` tokens from the system irreversibly on behalf of `from`.
-     *
-     * @param from the address of the sender
-     * @param value the amount of money to burn
-    *)
+  (**
+   * Destroy tokens from other account
+   *
+   * Remove `value` tokens from the system irreversibly on behalf of `from`.
+   *
+   * @param from the address of the sender
+   * @param value the amount of money to burn
+  *)
   let burn_from : Types.address -> int64 -> Types.Tx.receipt =
     let burn_from_abi =
       match find_method "burnFrom"  with
@@ -251,15 +239,13 @@ struct
       | Some abi -> abi
     in
     fun from value ->
-      let tx =
-        Compile.call_method_tx
-          ~abi:burn_from_abi
-          ~src:X.account
-          ~ctx:ctx_address
-          ~gas:(Z.of_int 99999)
-          ~arguments:ABI.([ address_val from; uint256_val value ])
-      in
-      Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx      
-  
+      Compile.execute_method
+        ~uri:X.uri
+        ~abi:burn_from_abi
+        ~src:X.account
+        ~ctx:ctx_address
+        ~gas:(Z.of_int 99999)
+        ~arguments:ABI.([ address_val from; uint256_val value ])
+
 
 end

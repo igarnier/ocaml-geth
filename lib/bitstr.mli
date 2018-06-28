@@ -1,29 +1,43 @@
 open Basic
 
-type bitstring = private string
-type hexstring = private string
+module Hex :
+sig
 
-val string_is_hex : string -> bool
+  type t = private string
 
-val compress : hexstring -> bitstring
-val uncompress : bitstring -> hexstring
+  val is_hex : string -> bool
 
-val hex_of_int : int -> hexstring
-val hex_of_bigint : Z.t -> hexstring  
-val hex_of_char : char -> hexstring
-val hex_of_int64 : int64 -> hexstring
-val hex_of_string : string -> hexstring
-val hex_as_string : hexstring -> string
+  val of_int : int -> t
+  val of_bigint : Z.t -> t  
+  val of_char : char -> t
+  val of_int64 : int64 -> t
+  val of_string : string -> t
+  val as_string : t -> string
+  val length : t -> Bytes.t
 
-val bits_of_int64 : int64 -> bitstring
-val bits_of_string : string -> bitstring
-val bits_as_string : bitstring -> string
+end
 
-type pad_direction = [ `left | `right ]
+module Bit :
+sig
+
+  type t = private string
+
+  val of_int64 : int64 -> t
+  val of_string : string -> t
+  val as_string : t -> string
+
+  type pad_direction = [ `left | `right ]
   
-val bit_length : bitstring -> Bits.t
-val zero_padding : dir:pad_direction -> bits:bitstring -> zeroes:Bits.t -> bitstring
-val one_padding  : dir:pad_direction -> bits:bitstring -> ones:Bits.t -> bitstring
-val zero_pad_to : dir:pad_direction -> bits:bitstring -> target_bits:Bits.t -> bitstring
-val one_pad_to : dir:pad_direction -> bits:bitstring -> target_bits:Bits.t -> bitstring
-val concat : bitstring list -> bitstring
+  val length : t -> Bits.t
+  val zero_padding : dir:pad_direction -> bits:t -> zeroes:Bits.t -> t
+  val one_padding  : dir:pad_direction -> bits:t -> ones:Bits.t -> t
+  val zero_pad_to : dir:pad_direction -> bits:t -> target_bits:Bits.t -> t
+  val one_pad_to : dir:pad_direction -> bits:t -> target_bits:Bits.t -> t
+  val concat : t list -> t
+
+  val take : t -> Bits.t -> t * t
+  
+end
+
+val compress : Hex.t -> Bit.t
+val uncompress : Bit.t -> Hex.t

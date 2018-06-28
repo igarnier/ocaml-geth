@@ -3,14 +3,13 @@
     of the corresponding ECDSA public key. Cf Yellow Paper. *)
 
 (** Addresses are 20 bytes long, 40 bytes in hex form + 0x. *)
-(* TODO: use Bitstr.hex_string *)
-type address = private string
+type address = Bitstr.Hex.t
 
 (** hash256 are 32 bytes long, 64 bytes in hex form + 0x. *)
-type hash256 = private string
+type hash256 = Bitstr.Hex.t
 
 (** hash512 are 64 bytes long, 128 bytes in hex form + 0x. *)
-type hash512 = private string
+type hash512 = Bitstr.Hex.t
 
 
 val address_to_string   : address -> string

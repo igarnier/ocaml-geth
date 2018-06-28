@@ -166,7 +166,7 @@ sig
   val dup : int -> instr_code    
 end
 
-val parse_hexstring : Bitstr.hexstring -> bytecode
+val parse_hexstring : Bitstr.Hex.t -> bytecode
 
 val literal_of_int : int -> literal
 

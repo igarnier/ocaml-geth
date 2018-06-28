@@ -1,36 +1,36 @@
 open Batteries
 
-type address = string
-type hash256 = string
-type hash512 = string
+type address = Bitstr.Hex.t
+type hash256 = Bitstr.Hex.t
+type hash512 = Bitstr.Hex.t
 
-let address_to_string x = x
+let address_to_string = Bitstr.Hex.as_string
 
 let address_from_string x =
-  if String.length x != 42 || not (Bitstr.string_is_hex x) then
+  if String.length x != 42 || not (Bitstr.Hex.is_hex x) then
     failwith "address_from_string: input must be 20 bytes (40 hex chars) 0x-prefixed"
   else
-    (x : address)
+    Bitstr.Hex.of_string x
 
-let hash256_to_string x = x
+let hash256_to_string = Bitstr.Hex.as_string
 
 let hash256_from_string (x : string) =
-  if String.length x != 66 || not (Bitstr.string_is_hex x) then
+  if String.length x != 66 || not (Bitstr.Hex.is_hex x) then
     failwith "hash256_from_string: input must be 32 bytes (64 hex chars) 0x-prefixed"
   else
-    (x : hash256)
+    Bitstr.Hex.of_string x
 
-let hash512_to_string x = x
+let hash512_to_string = Bitstr.Hex.as_string
 
 let hash512_from_string x =
   let len = String.length x in
-  if len != 130 || not (Bitstr.string_is_hex x) then
+  if len != 130 || not (Bitstr.Hex.is_hex x) then
     let open Printf in
     let msg = sprintf "hash512_from_string: input must be 64 bytes (128 hex chars) 0x-prefixed.\
                        Got %s, length %d instead." x len in
     failwith msg
   else
-    (x : hash512)
+    Bitstr.Hex.of_string x
 
 
 type wei       = int (* Z.t ? *)
@@ -175,11 +175,11 @@ struct
     match j with
     | `Null -> None
     | `Assoc fields ->
-      let block_hash   = assoc "blockHash" fields |> Json.drop_string in
+      let block_hash   = assoc "blockHash" fields |> Json.drop_string |> hash256_from_string in
       let block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
       let contract_address =
         match assoc "contractAddress" fields with
-        | `String addr -> Some addr
+        | `String addr -> Some (address_from_string addr)
         | `Null        -> None
         | _ ->
           failwith "Types.receipt_from_json: unexpected result"
@@ -198,7 +198,7 @@ struct
                  |> Json.drop_list
                  |> List.map log_from_json
       in
-      let transaction_hash = assoc "transactionHash" fields |> Json.drop_string in
+      let transaction_hash = assoc "transactionHash" fields |> Json.drop_string |> hash256_from_string in
       let transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
       Some {
         block_hash;
@@ -215,7 +215,6 @@ struct
     | _ ->
       let s = Yojson.Safe.to_string j in
       failwith ("Types.receipt_from_json: unexpected json: "^s)
-
 
 end
 
@@ -501,13 +500,14 @@ let block_from_json : Json.json -> block_info =
     let accounts = assoc "accounts" fields |> Json.drop_assoc in
     let accounts =
       ListLabels.map accounts ~f:(fun (address, json) ->
+          let address = address_from_string address in
           let fields = Json.drop_assoc json in
           let balance = assoc "balance" fields |> Json.drop_bigint_as_string in
           let code =
             assoc "code" fields
             |> Json.drop_string
             |> _0x
-            |> Bitstr.hex_of_string
+            |> Bitstr.Hex.of_string
             |> Evm.parse_hexstring
           in
           let code_hash =

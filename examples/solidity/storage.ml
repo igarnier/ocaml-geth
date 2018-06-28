@@ -85,16 +85,17 @@ struct
 
   (* --------------------------------------------------------------------- *)
   (* Calling a method from a solidity smart contract *)
-  (* --------------------------------------------------------------------- *)    
+  (* --------------------------------------------------------------------- *)
+
+  let ctx =
+    match solidity_output.contracts with
+    | [] | _ :: _ :: _ ->
+      failwith "Storage: more than one contract"
+    | [ctx] -> ctx
 
   let find_method mname =
-    List.fold_left (fun acc ctx ->
-        let res = Compile.get_method ctx mname in
-        match res with
-        | None   -> acc
-        | Some _ -> res
-      ) None solidity_output.contracts
-
+    Compile.get_method ctx mname
+      
   let set =
     let set_abi =
       match find_method "set"  with
@@ -102,15 +103,16 @@ struct
       | Some abi -> abi
     in
     fun i ->
-      let tx =
-        Compile.call_method_tx
+      let receipt =
+        Compile.execute_method
+          ~uri:X.uri
           ~abi:set_abi
           ~arguments:[ABI.Int { v = i; t = SolidityTypes.uint_t 256 }]
           ~src:X.account
           ~ctx:storage_ctx_address
           ~gas:(Z.of_int 99999)
       in
-      Rpc.Eth.send_transaction_and_get_receipt ~uri:X.uri ~transaction:tx
+      ABI.decode_events ctx.abi receipt
 
   let get =
     let get_abi =
@@ -119,15 +121,13 @@ struct
       | Some abi -> abi
     in
     fun () ->
-      let tx =
-        Compile.call_method_tx
-          ~abi:get_abi
-          ~arguments:[]
-          ~src:X.account
-          ~ctx:storage_ctx_address
-          ~gas:(Z.of_int 99999)
-      in
-      Rpc.Eth.call ~uri:X.uri ~transaction:tx ~at_time:`latest
+      Compile.call_method
+        ~uri:X.uri
+        ~abi:get_abi
+        ~arguments:[]
+        ~src:X.account
+        ~ctx:storage_ctx_address
+        ~gas:(Z.of_int 99999)
 
   (* let _ = 
    *   if
@@ -155,7 +155,7 @@ let _ =
   Printf.printf "%s\n" (Types.address_to_string S.storage_ctx_address)
 
 
-let result = S.set 12345L
+let receipt = S.set 12345L
 
 let result =
   Printf.printf "result: %s\n" (S.get ())

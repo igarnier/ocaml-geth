@@ -175,7 +175,7 @@ struct
     let rec loop () =
       match get_transaction_receipt ~uri ~transaction_hash:hash with
       | None ->
-        Unix.sleep 1; loop ()
+        Unix.sleep 2; loop ()
       | Some receipt ->
         receipt
     in
@@ -190,7 +190,7 @@ struct
         gas   = Some gas;
         gas_price = None;
         value = None;
-        data  = Bitstr.hex_as_string data;
+        data  = Bitstr.Hex.as_string data;
         nonce = None
       }
     in
