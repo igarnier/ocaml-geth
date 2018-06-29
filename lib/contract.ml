@@ -52,6 +52,30 @@ struct
     | Tstatic_array { typ } when is_dynamic typ -> true
     | _ -> false
 
+  let rec print t =
+    let open Printf in
+    match t with
+    | Tatomic atomic ->
+      (match atomic with
+       | Tuint { w } -> sprintf "uint%d" (Bits.to_int w)
+       | Tint { w }  -> sprintf "int%d" (Bits.to_int w)
+       | Taddress    -> "address"
+       | Tbool       -> "bool"
+       | Tfixed { m; n }   -> sprintf "fixed%dx%d" (Bits.to_int m) (Bits.to_int n)
+       | Tufixed { m; n }  -> sprintf "ufixed%dx%d" (Bits.to_int m) (Bits.to_int n)
+       | Tbytes { nbytes = StaticLength n } -> sprintf "bytes%d" (Bytes.to_int n)
+       | Tbytes { nbytes = DynamicLength } -> sprintf "bytes"
+       | Tstring -> "string"
+      )
+    | Tfunction -> "bytes24"
+    | Tstatic_array { numel; typ } ->
+      sprintf "%s[%d]" (print typ) numel
+    | Tdynamic_array { typ } ->
+      sprintf "%s[]" (print typ)
+    | Ttuple types ->
+      let tys = List.map print types in
+      "("^(String.concat "," tys)^")"
+
   let uint_t w =
     Tatomic (Tuint { w = Bits.int w })
 
@@ -185,36 +209,12 @@ struct
 
   open Printf
 
-  let rec encoding_of_type t =
-    let open SolidityTypes in
-    match t with
-    | Tatomic atomic ->
-      (match atomic with
-       | Tuint { w } -> sprintf "uint%d" (Bits.to_int w)
-       | Tint { w }  -> sprintf "int%d" (Bits.to_int w)
-       | Taddress    -> "address"
-       | Tbool       -> "bool"
-       | Tfixed { m; n }   -> sprintf "fixed%dx%d" (Bits.to_int m) (Bits.to_int n)
-       | Tufixed { m; n }  -> sprintf "ufixed%dx%d" (Bits.to_int m) (Bits.to_int n)
-       | Tbytes { nbytes = StaticLength n } -> sprintf "bytes%d" (Bytes.to_int n)
-       | Tbytes { nbytes = DynamicLength } -> sprintf "bytes"
-       | Tstring -> "string"
-      )
-    | Tfunction -> "bytes24"
-    | Tstatic_array { numel; typ } ->
-      sprintf "%s[%d]" (encoding_of_type typ) numel
-    | Tdynamic_array { typ } ->
-      sprintf "%s[]" (encoding_of_type typ)
-    | Ttuple types ->
-      let tys = List.map encoding_of_type types in
-      "("^(String.concat "," tys)^")"
-
   let string_of_signature { m_name; m_inputs } =
     let types =
       List.map (fun { arg_type } -> arg_type) m_inputs
     in
     let encodings =
-      List.map encoding_of_type types
+      List.map SolidityTypes.print types
     in
     let elts = String.concat "," encodings in
     m_name^"("^elts^")"
@@ -580,14 +580,15 @@ struct
     let prepare_constructor ctx =
       let constr_abi = get_constructor ctx in
       let inputs     = constr_abi.ABI.c_inputs in
-      let typechecks =
-        List.for_all2 (fun v t -> ABI.type_of v = t.ABI.arg_type) arguments inputs
-      in
-      if not typechecks then
-        failwith "deploy_rpc: constructor argument types do not match constructor declaration"
-      else
-        let encoded = ABI.(Encode.encode (ABI.tuple arguments)) in
-        Bitstr.(uncompress (Bit.concat [ctx.bin; encoded]))
+      List.iter2 (fun v t -> 
+          if not (ABI.type_of v = t.ABI.arg_type) then
+            (let typeof_v = SolidityTypes.print (ABI.type_of v) in
+             let arg_typ  = SolidityTypes.print t.ABI.arg_type in
+             failwith ("deploy_rpc: constructor argument types do not match constructor declaration: "^typeof_v^" vs "^arg_typ)
+            )
+        ) arguments inputs;
+      let encoded = ABI.(Encode.encode (ABI.tuple arguments)) in
+      Bitstr.(uncompress (Bit.concat [ctx.bin; encoded]))
     in
     let deploy data =
       Rpc.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ~gas
