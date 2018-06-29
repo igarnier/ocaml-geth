@@ -16,7 +16,7 @@ sig
       Tatomic of atomic
     | Tfunction
     | Tstatic_array of { numel : int; typ : t }
-    | Tdynamic_array of { typ : t }                       
+    | Tdynamic_array of { typ : t }
     | Ttuple of t list
   val is_dynamic : t -> bool
   val uint_t : int -> t
@@ -28,17 +28,19 @@ end
 
 module ABI :
 sig
-  
-  type value =
-    | Int of { v : int64; t : SolidityTypes.t; }
-    | Bool of { v : bool; }
-    | String of { v : string; t : SolidityTypes.t; }
-    | Tuple of value list
-    | Array of { vs : value list; static : static }
 
-  and static =
-    | Static
-    | Dynamic
+  type value =
+    {
+      desc : value_desc;
+      typ  : SolidityTypes.t
+    }
+
+  and value_desc =
+    | Int     of int64
+    | Bool    of bool
+    | String  of string
+    | Address of Types.address
+    | Tuple   of value list
 
   type event =
     {
@@ -78,11 +80,28 @@ sig
   val uint256_val : int64 -> value
   val string_val : string -> value
   val bytes_val : string -> value
-  val address_val : Types.address -> value    
+  val address_val : Types.address -> value
   val tuple : value list -> value
+
+  val method_id : method_abi -> Bitstr.Bit.t
   val type_of : value -> SolidityTypes.t
-  val encode_value : value -> Bitstr.Bit.t
-  val decode_events : abi list -> Types.Tx.receipt -> event list
+
+  module Encode :
+  sig
+    val int64_as_uint256 : int64 -> Bitstr.Bit.t
+    val int64_as_int256 : int64 -> Bitstr.Bit.t
+    val address : Types.address -> Bitstr.Bit.t
+    val bytes_static : string -> Basic.Bytes.t -> Bitstr.Bit.t
+    val bytes_dynamic : string -> Bitstr.Bit.t
+    val encode : value -> Bitstr.Bit.t
+  end
+
+  module Decode :
+  sig
+    val decode : Bitstr.Bit.t -> SolidityTypes.t -> value
+    val decode_events : abi list -> Types.Tx.receipt -> event list
+  end
+
   val from_json : Json.json -> abi list
 end
 
