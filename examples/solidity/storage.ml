@@ -73,8 +73,8 @@ struct
       ~account:X.account
       ~gas:(Z.of_int 175000)
       ~contract:solidity_output
-      ~arguments:ABI.([ Int { v = 0x123456L; t = SolidityTypes.uint_t 256 };
-                        String { v = "This is a test"; t = SolidityTypes.string_t }
+      ~arguments:ABI.([ uint256_val 0x123456L;
+                        string_val "This is a test"
                       ])
  
   let storage_ctx_address =
@@ -107,12 +107,13 @@ struct
         Compile.execute_method
           ~uri:X.uri
           ~abi:set_abi
-          ~arguments:[ABI.Int { v = i; t = SolidityTypes.uint_t 256 }]
+          ~arguments:[ABI.uint256_val i]
           ~src:X.account
           ~ctx:storage_ctx_address
           ~gas:(Z.of_int 99999)
       in
-      ABI.decode_events ctx.abi receipt
+      ABI.Decode.decode_events ctx.abi receipt
+        
 
   let get =
     let get_abi =
@@ -154,8 +155,7 @@ module S = Storage(X)
 let _ =
   Printf.printf "%s\n" (Types.address_to_string S.storage_ctx_address)
 
-
-let receipt = S.set 12345L
+let receipt = S.set 0x666L
 
 let result =
   Printf.printf "result: %s\n" (S.get ())

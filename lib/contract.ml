@@ -230,7 +230,7 @@ struct
 
   open Printf
 
-  let string_of_signature { m_name; m_inputs } =
+  let string_of_signature m_name m_inputs =
     let types =
       List.map (fun { arg_type } -> arg_type) m_inputs
     in
@@ -240,6 +240,11 @@ struct
     let elts = String.concat "," encodings in
     m_name^"("^elts^")"
 
+  let keccak str =
+    let hash = Cryptokit.Hash.keccak 256 in
+    let resl = Cryptokit.hash_string hash str in
+    Bitstr.Bit.of_string resl
+
   let keccak_4_bytes str =
     let hash = Cryptokit.Hash.keccak 256 in
     let resl = Cryptokit.hash_string hash str in
@@ -247,7 +252,10 @@ struct
     Bitstr.Bit.of_string head
 
   let method_id method_abi =
-    keccak_4_bytes (string_of_signature method_abi)
+    keccak_4_bytes (string_of_signature method_abi.m_name method_abi.m_inputs)
+
+  let event_id event_abi =
+    keccak (string_of_signature event_abi.e_name event_abi.e_inputs)
 
   (* -------------------------------------------------------------------------------- *)
 
@@ -376,6 +384,7 @@ struct
   struct
 
     let rec decode b t =
+      Printf.eprintf "decoding %s with data %s\n" (SolidityTypes.print t) (Bitstr.Hex.as_string (Bitstr.uncompress b));
       let open SolidityTypes in
       match t with
       | Tatomic at ->
@@ -388,8 +397,9 @@ struct
         decode_dynamic_array b typ
       | Ttuple typs ->
         tuple_val (decode_tuple b typs)
-
+          
     and decode_atomic b at =
+      Printf.eprintf "decoding atomic %s\n" (SolidityTypes.print (SolidityTypes.Tatomic at));      
       match at with
       | Tuint { w } ->
         decode_uint b w
@@ -412,7 +422,6 @@ struct
         let len = Z.to_int (Bitstr.Bit.to_unsigned_bigint len) in
         let bytes, _ = Bitstr.Bit.take rem (bytes_to_bits (Bytes.int len)) in
         bytes_val (Bitstr.Bit.as_string bytes)
-
       | Tstring ->
         let len, rem = Bitstr.Bit.take b (Bits.int 256) in
         let len = Z.to_int (Bitstr.Bit.to_unsigned_bigint len) in
@@ -440,6 +449,10 @@ struct
       dynamic_array_val (decode_tuple b (List.make numel t)) t
 
     and decode_tuple b typs =
+      Printf.eprintf "decoding tuple %s with data = %s\n" 
+        (SolidityTypes.print (SolidityTypes.Ttuple typs))
+        (Bitstr.Hex.as_string (Bitstr.uncompress b))
+      ;
       let _, values =
         List.fold_left (fun (header_chunk, values) ty ->
             let chunk, rem = Bitstr.Bit.take header_chunk (Bits.int 256) in
@@ -455,9 +468,10 @@ struct
               (rem, value :: values)
         ) (b, []) typs
       in
-      values
+      List.rev values
 
     and decode_uint (b : Bitstr.Bit.t) w =
+      Printf.eprintf "decode_uint: %s\n" (Bitstr.Hex.as_string (Bitstr.uncompress b));
       let z = Bitstr.Bit.to_unsigned_bigint b in
       if Z.fits_int64 z then
         { desc = Int (Z.to_int64 z);
@@ -467,6 +481,7 @@ struct
           typ  = SolidityTypes.uint_t (Bits.to_int w) }          
           
     and decode_int b w =
+      Printf.eprintf "decode_int: %s\n" (Bitstr.Hex.as_string (Bitstr.uncompress b));
       let z = Bitstr.Bit.to_signed_bigint b in
       if Z.fits_int64 z then
         { desc = Int (Z.to_int64 z);
@@ -475,7 +490,45 @@ struct
         { desc = BigInt z;
           typ  = SolidityTypes.uint_t (Bits.to_int w) }
             
-    let decode_events abis receipt = failwith ""
+    let decode_events abis receipt =
+      let open Types.Tx in      
+      let codes = List.fold_left (fun acc abi ->
+          match abi with
+          | Event event_abi ->
+            let id = Bitstr.uncompress (event_id event_abi) in
+            (id, event_abi) :: acc
+          | _ -> acc
+        ) [] abis
+      in
+      List.fold_left (fun acc log ->
+          let topics = log.log_topics in
+          let data   = log.log_data in
+          (* Check whether /at most one/ topic corresponds to an event *)
+          let relevant = List.filter (fun hash ->
+              List.mem_assoc hash codes
+            ) topics
+          in
+          let event =
+            match relevant with
+            | [] | _ :: _ :: _ ->
+              failwith "0 or > 1 matching event for topic, aborting"
+            | [ hash ] ->
+              List.assoc hash codes
+          in
+          let types  = List.map (fun { arg_type } -> arg_type) event.e_inputs in
+          let fields =
+            match decode (Bitstr.compress (Bitstr.Hex.of_string data)) (Ttuple types) with
+            | { desc = Tuple values } -> values
+            | exception _ ->
+              failwith "decode_events: error while decoding"
+            | _ ->
+              failwith "decode_events: bug found"
+          in          
+          {
+            event_name = event.e_name;
+            event_args = fields
+          } :: acc
+        ) [] receipt.logs
 
   end
 
@@ -750,7 +803,6 @@ struct
       ~(gas:Z.t) =
     let tx = call_method_tx ~abi ~arguments ~src ~ctx ~gas in
     Rpc.Eth.send_transaction_and_get_receipt ~uri ~transaction:tx
-
 
   let call_method
       ~(uri:string)

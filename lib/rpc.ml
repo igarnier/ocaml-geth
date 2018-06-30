@@ -76,7 +76,6 @@ struct
     | `block i  ->
       let s = Printf.sprintf "0x%x" i in
       `String s
-      (* let _ = failwith "TODO" in `Int i *)
     | `latest   -> `String "latest"
     | `earliest -> `String "earliest"
     | `pending  -> `String "pending"    
@@ -178,6 +177,9 @@ struct
         Unix.sleep 2; loop ()
       | Some receipt ->
         receipt
+      | exception err ->
+        Printf.eprintf "send_transaction_and_get_receipt: error in get_transaction_receipt\n";
+        raise err
     in
     loop ()
 
