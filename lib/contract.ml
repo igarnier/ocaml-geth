@@ -298,8 +298,7 @@ struct
       if i < 0L then
         failwith "encode_int: cannot encode negative integer as unsigned int"
       else
-        (Printf.eprintf "debug: encoding uint %Ld as %s\n" i (Bitstr.(Hex.as_string (uncompress (Bit.of_int64 i))));
-         Bitstr.(Bit.zero_pad_to ~dir:`left ~bits:(Bit.of_int64 i) ~target_bits:(Bits.int 256)))
+        Bitstr.Bit.of_bigint 256 (Z.of_int64 i)
 
     let int64_as_int256 (i : int64) =
       Bitstr.Bit.of_bigint 256 (Z.of_int64 i)
@@ -319,11 +318,11 @@ struct
     let bytes_dynamic s =
       let len  = String.length s in
       let elen = int64_as_uint256 (Int64.of_int len) in
-      Printf.printf "debug: encoding string of length %d: encoding of length=%s, string = %s\n"
-        len
-        Bitstr.(Hex.as_string (uncompress elen))
-        Bitstr.(Hex.as_string (uncompress (zero_pad_string_to_mod32 s)))
-      ;
+      (* Printf.printf "debug: encoding string of length %d: encoding of length=%s, string = %s\n"
+       *   len
+       *   Bitstr.(Hex.as_string (uncompress elen))
+       *   Bitstr.(Hex.as_string (uncompress (zero_pad_string_to_mod32 s)))
+       * ; *)
       Bitstr.Bit.concat [elen; zero_pad_string_to_mod32 s]
 
     let rec encode (value : value) =
@@ -384,7 +383,7 @@ struct
   struct
 
     let rec decode b t =
-      Printf.eprintf "decoding %s with data %s\n" (SolidityTypes.print t) (Bitstr.Hex.as_string (Bitstr.uncompress b));
+      (* Printf.eprintf "decoding %s with data %s\n" (SolidityTypes.print t) (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
       let open SolidityTypes in
       match t with
       | Tatomic at ->
@@ -399,7 +398,7 @@ struct
         tuple_val (decode_tuple b typs)
           
     and decode_atomic b at =
-      Printf.eprintf "decoding atomic %s\n" (SolidityTypes.print (SolidityTypes.Tatomic at));      
+      (* Printf.eprintf "decoding atomic %s\n" (SolidityTypes.print (SolidityTypes.Tatomic at));       *)
       match at with
       | Tuint { w } ->
         decode_uint b w
@@ -449,10 +448,10 @@ struct
       dynamic_array_val (decode_tuple b (List.make numel t)) t
 
     and decode_tuple b typs =
-      Printf.eprintf "decoding tuple %s with data = %s\n" 
-        (SolidityTypes.print (SolidityTypes.Ttuple typs))
-        (Bitstr.Hex.as_string (Bitstr.uncompress b))
-      ;
+      (* Printf.eprintf "decoding tuple %s with data = %s\n"  *)
+      (*   (SolidityTypes.print (SolidityTypes.Ttuple typs))
+       *   (Bitstr.Hex.as_string (Bitstr.uncompress b))
+       * ; *)
       let _, values =
         List.fold_left (fun (header_chunk, values) ty ->
             let chunk, rem = Bitstr.Bit.take header_chunk (Bits.int 256) in
@@ -471,7 +470,7 @@ struct
       List.rev values
 
     and decode_uint (b : Bitstr.Bit.t) w =
-      Printf.eprintf "decode_uint: %s\n" (Bitstr.Hex.as_string (Bitstr.uncompress b));
+      (* Printf.eprintf "decode_uint: %s\n" (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
       let z = Bitstr.Bit.to_unsigned_bigint b in
       if Z.fits_int64 z then
         { desc = Int (Z.to_int64 z);
@@ -481,7 +480,7 @@ struct
           typ  = SolidityTypes.uint_t (Bits.to_int w) }          
           
     and decode_int b w =
-      Printf.eprintf "decode_int: %s\n" (Bitstr.Hex.as_string (Bitstr.uncompress b));
+      (* Printf.eprintf "decode_int: %s\n" (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
       let z = Bitstr.Bit.to_signed_bigint b in
       if Z.fits_int64 z then
         { desc = Int (Z.to_int64 z);
