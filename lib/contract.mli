@@ -37,10 +37,12 @@ sig
 
   and value_desc =
     | Int     of int64
+    | BigInt  of Z.t
     | Bool    of bool
     | String  of string
     | Address of Types.address
     | Tuple   of value list
+    | Func    of { selector : string; address : Bitstr.Hex.t }
 
   type event =
     {
@@ -80,8 +82,12 @@ sig
   val uint256_val : int64 -> value
   val string_val : string -> value
   val bytes_val : string -> value
+  val bytes_val : string -> value
+  val bool_val : bool -> value
   val address_val : Types.address -> value
-  val tuple : value list -> value
+  val tuple_val : value list -> value
+  val static_array_val : value list -> SolidityTypes.t -> value
+  val dynamic_array_val : value list -> SolidityTypes.t -> value
 
   val method_id : method_abi -> Bitstr.Bit.t
   val type_of : value -> SolidityTypes.t

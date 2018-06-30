@@ -37,3 +37,7 @@ let bits_to_bytes (i : Bits.t) =
     failwith "bits_to_bytes: not a multiple of 8"
   else
     Bytes.int (bits / 8)
+
+let bytes_to_bits (i : Bytes.t) =
+  let bytes = Bytes.to_int i in
+    Bits.int (bytes * 8)

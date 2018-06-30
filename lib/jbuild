@@ -3,6 +3,6 @@
 (library
  ((name        ocaml_geth)
   (public_name ocaml-geth)
-  (libraries (batteries yojson netclient ssh-client cryptokit zarith hex))
+  (libraries (batteries yojson netclient ssh-client cryptokit zarith hex bitstring))
   (preprocess (pps (bitstring.ppx)))
 ))

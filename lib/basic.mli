@@ -27,3 +27,4 @@ sig
 end
 
 val bits_to_bytes : Bits.t -> Bytes.t
+val bytes_to_bits : Bytes.t -> Bits.t

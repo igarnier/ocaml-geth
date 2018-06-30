@@ -102,10 +102,12 @@ struct
 
   and value_desc =
     | Int     of int64
+    | BigInt  of Z.t
     | Bool    of bool
     | String  of string
     | Address of Types.address
     | Tuple   of value list
+    | Func    of { selector : string; address : Bitstr.Hex.t }
 
   type event =
     {
@@ -192,16 +194,35 @@ struct
       typ  = SolidityTypes.bytes_t
     }
 
+  let bool_val (v : bool) =
+    { 
+      desc = Bool v;
+      typ  = SolidityTypes.address_t
+    }
+
   let address_val (v : Types.address) =
     { 
       desc = Address v;
       typ  = SolidityTypes.address_t
     }
 
-  let tuple vals =
+  let tuple_val vals =
     { 
       desc = Tuple vals; 
       typ = SolidityTypes.Ttuple (List.map type_of vals) 
+    }
+
+  let static_array_val vals typ =
+    {
+      desc = Tuple vals;
+      typ  = SolidityTypes.Tstatic_array { numel = List.length vals;
+                                           typ }
+    }
+
+  let dynamic_array_val vals typ =
+    {
+      desc = Tuple vals;
+      typ  = SolidityTypes.Tdynamic_array { typ }
     }
 
   (* -------------------------------------------------------------------------------- *)
@@ -273,10 +294,7 @@ struct
          Bitstr.(Bit.zero_pad_to ~dir:`left ~bits:(Bit.of_int64 i) ~target_bits:(Bits.int 256)))
 
     let int64_as_int256 (i : int64) =
-      if i < 0L then
-        Bitstr.(Bit.one_pad_to ~dir:`left ~bits:(Bit.of_int64 i) ~target_bits:(Bits.int 256))
-      else
-        Bitstr.(Bit.zero_pad_to ~dir:`left ~bits:(Bit.of_int64 i) ~target_bits:(Bits.int 256))
+      Bitstr.Bit.of_bigint 256 (Z.of_int64 i)
 
     let address (s : Types.address) =
       let encoded = Bitstr.compress s in
@@ -356,24 +374,110 @@ struct
 
   module Decode =
   struct
-    
-    let decode _ _ = failwith ""
-    let decode_events _ _ = failwith ""
+
+    let rec decode b t =
+      let open SolidityTypes in
+      match t with
+      | Tatomic at ->
+        decode_atomic b at
+      | Tfunction ->
+        decode_function b
+      | Tstatic_array { numel; typ } ->
+        decode_static_array b numel typ
+      | Tdynamic_array { typ } ->
+        decode_dynamic_array b typ
+      | Ttuple typs ->
+        tuple_val (decode_tuple b typs)
+
+    and decode_atomic b at =
+      match at with
+      | Tuint { w } ->
+        decode_uint b w
+      | Tint { w } ->
+        decode_int b w
+      | Taddress ->
+        address_val (decode_address b)
+      | Tbool ->
+        let z = Bitstr.Bit.to_unsigned_bigint b in
+        bool_val (Z.gt z Z.zero)
+      | Tfixed _
+      | Tufixed _ ->
+        failwith "decode_atomic: fixed point numbers not handled yet"
+      | Tbytes { nbytes = StaticLength n } ->
+        let    n     = bytes_to_bits n in
+        let bytes, _ = Bitstr.Bit.take b n in
+        bytes_val (Bitstr.Bit.as_string bytes)
+      | Tbytes { nbytes = DynamicLength } ->
+        let len, rem = Bitstr.Bit.take b (Bits.int 256) in
+        let len = Z.to_int (Bitstr.Bit.to_unsigned_bigint len) in
+        let bytes, _ = Bitstr.Bit.take rem (bytes_to_bits (Bytes.int len)) in
+        bytes_val (Bitstr.Bit.as_string bytes)
+
+      | Tstring ->
+        let len, rem = Bitstr.Bit.take b (Bits.int 256) in
+        let len = Z.to_int (Bitstr.Bit.to_unsigned_bigint len) in
+        let bytes, _ = Bitstr.Bit.take rem (bytes_to_bits (Bytes.int len)) in
+        string_val (Bitstr.Bit.as_string bytes)
+
+    and decode_address b =
+      let addr, _ = Bitstr.Bit.take b (Bits.int 160) in
+      Bitstr.uncompress addr
+
+    and decode_function b =
+      let content, _ = Bitstr.Bit.take b (Bits.int (160 + 32)) in
+      let address, selector = Bitstr.Bit.take content (Bits.int 160) in
+      let address  = decode_address address in
+      let selector = Bitstr.Bit.as_string selector in
+      { desc = Func { selector; address };
+        typ  = SolidityTypes.Tfunction }
+
+    and decode_static_array b numel t =
+      static_array_val (decode_tuple b (List.make numel t)) t
+        
+    and decode_dynamic_array b t =
+      let numel, content = Bitstr.Bit.take b (Bits.int 256) in
+      let numel = Z.to_int (Bitstr.Bit.to_unsigned_bigint numel) in
+      dynamic_array_val (decode_tuple b (List.make numel t)) t
+
+    and decode_tuple b typs =
+      let _, values =
+        List.fold_left (fun (header_chunk, values) ty ->
+            let chunk, rem = Bitstr.Bit.take header_chunk (Bits.int 256) in
+            if SolidityTypes.is_dynamic ty then
+              let offset  = Bitstr.Bit.to_unsigned_bigint chunk in
+              let offset  = Z.to_int offset in
+              (* offsets are computed starting from the beginning of [b] *)
+              let _, tail = Bitstr.Bit.take b (bytes_to_bits (Bytes.int offset )) in
+              let value   = decode tail ty in
+              (rem, value :: values)
+            else
+              let value = decode chunk ty in
+              (rem, value :: values)
+        ) (b, []) typs
+      in
+      values
+
+    and decode_uint (b : Bitstr.Bit.t) w =
+      let z = Bitstr.Bit.to_unsigned_bigint b in
+      if Z.fits_int64 z then
+        { desc = Int (Z.to_int64 z);
+          typ  = SolidityTypes.uint_t (Bits.to_int w) }
+      else
+        { desc = BigInt z;
+          typ  = SolidityTypes.uint_t (Bits.to_int w) }          
+          
+    and decode_int b w =
+      let z = Bitstr.Bit.to_signed_bigint b in
+      if Z.fits_int64 z then
+        { desc = Int (Z.to_int64 z);
+          typ  = SolidityTypes.uint_t (Bits.to_int w) }
+      else
+        { desc = BigInt z;
+          typ  = SolidityTypes.uint_t (Bits.to_int w) }
+            
+    let decode_events abis receipt = failwith ""
 
   end
-
-  (* let encode_list (vs : value list) (ts : SolidityTypes.t list) =
-   *   let rec loop vs ts acc =
-   *     match vs, ts with
-   *     | [], [] -> acc
-   *     | v :: vs', t :: ts' ->
-   *       let enc = encode_value v t in
-   *       let acc = failwith "" in
-   *       loop vs' ts' acc
-   *     | _ ->
-   *       failwith "encode_list: value and type list have different lengths"
-   *   in
-   *   loop vs ts (Bitstr.Bit.of_string "") *)
 
   (* -------------------------------------------------------------------------------- *)
   (* Deserialization of ABIs from solc --json output *)
@@ -587,7 +691,7 @@ struct
              failwith ("deploy_rpc: constructor argument types do not match constructor declaration: "^typeof_v^" vs "^arg_typ)
             )
         ) arguments inputs;
-      let encoded = ABI.(Encode.encode (ABI.tuple arguments)) in
+      let encoded = ABI.(Encode.encode (ABI.tuple_val arguments)) in
       Bitstr.(uncompress (Bit.concat [ctx.bin; encoded]))
     in
     let deploy data =
@@ -623,7 +727,7 @@ struct
         failwith m
       else
         let method_id = ABI.method_id abi in
-        let encoded = ABI.(Encode.encode (ABI.tuple arguments)) in        
+        let encoded = ABI.(Encode.encode (ABI.tuple_val arguments)) in        
         let bitstring = Bitstr.Bit.concat [method_id; encoded] in
         let data = Bitstr.(Hex.as_string (uncompress bitstring)) in
         {
