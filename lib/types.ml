@@ -7,7 +7,7 @@ type hash512 = Bitstr.Hex.t
 let address_to_string = Bitstr.Hex.as_string
 
 let address_from_string x =
-  if String.length x != 42 || not (Bitstr.Hex.is_hex x) then
+  if String.length x <> 42 || not (Bitstr.Hex.is_hex x) then
     failwith "address_from_string: input must be 20 bytes (40 hex chars) 0x-prefixed"
   else
     Bitstr.Hex.of_string x
@@ -15,7 +15,7 @@ let address_from_string x =
 let hash256_to_string = Bitstr.Hex.as_string
 
 let hash256_from_string (x : string) =
-  if String.length x != 66 || not (Bitstr.Hex.is_hex x) then
+  if String.length x <> 66 || not (Bitstr.Hex.is_hex x) then
     failwith "hash256_from_string: input must be 32 bytes (64 hex chars) 0x-prefixed"
   else
     Bitstr.Hex.of_string x
@@ -24,7 +24,7 @@ let hash512_to_string = Bitstr.Hex.as_string
 
 let hash512_from_string x =
   let len = String.length x in
-  if len != 130 || not (Bitstr.Hex.is_hex x) then
+  if len <> 130 || not (Bitstr.Hex.is_hex x) then
     let open Printf in
     let msg = sprintf "hash512_from_string: input must be 64 bytes (128 hex chars) 0x-prefixed.\
                        Got %s, length %d instead." x len in

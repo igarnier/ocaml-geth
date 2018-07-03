@@ -743,7 +743,13 @@ struct
              failwith ("deploy_rpc: constructor argument types do not match constructor declaration: "^typeof_v^" vs "^arg_typ)
             )
         ) arguments inputs;
-      let encoded = ABI.(Encode.encode (ABI.tuple_val arguments)) in
+      let encoded = 
+        match arguments with
+        | [] ->
+          Bitstring.empty_bitstring
+        | _  ->
+          ABI.(Encode.encode (ABI.tuple_val arguments)) 
+      in
       Bitstr.(uncompress (Bit.concat [ctx.bin; encoded]))
     in
     let deploy data =

@@ -17,14 +17,20 @@ struct
 
   let is_hex (x : string) =
     let rec loop i len x acc =
-      if i = len then
+      if i >= len || not acc then
         acc
       else
-        loop (i+1) len x (acc && char_is_hex x.[i])
+        loop (i+1) len x (char_is_hex x.[i])
     in
-    x.[0] = '0'
-    && (x.[1] = 'x' || x.[1] = 'X')
-    && (loop 2 (String.length x) x true)
+    let len = String.length x in
+    if len < 2 then
+      failwith "is_hex: string too short"
+    else
+      let prefix = String.head x 2 in
+      (match prefix with
+       | "0x" | "0X" ->
+         loop 2 len x true
+       | _ -> false)
 
   let of_ubigint z =
     if Z.lt z Z.zero then
@@ -161,7 +167,7 @@ struct
 
   let zero_padding ~(dir:pad_direction) ~bits ~(zeroes : Bits.t) =
     let zeroes = Bits.to_int zeroes in
-    if zeroes mod 8 != 0 then
+    if zeroes mod 8 <> 0 then
       failwith "Bitstr.Bit.zero_padding: error, can only pad modulo 8"
     else
       (* let zero_chars_num = zeroes / 8 in
@@ -175,7 +181,7 @@ struct
 
   let one_padding ~(dir:pad_direction) ~bits ~(ones : Bits.t) =
     let ones = Bits.to_int ones in
-    if ones mod 8 != 0 then
+    if ones mod 8 <> 0 then
       failwith "Bitstr.Bit.one_padding: error, can only pad modulo 8"
     else
       (* let one_chars_num = ones / 8 in
@@ -229,7 +235,7 @@ struct
    * 
    * let zero_padding ~(dir:pad_direction) ~(bits : t) ~(zeroes : Bits.t) =
    *   let zeroes = Bits.to_int zeroes in
-   *   if zeroes mod 8 != 0 then
+   *   if zeroes mod 8 <> 0 then
    *     failwith "Bitstr.Bit.zero_padding: error, can only pad modulo 8"
    *   else
    *     let zero_chars_num = zeroes / 8 in
@@ -242,7 +248,7 @@ struct
    * 
    * let one_padding ~(dir:pad_direction) ~(bits : t) ~(ones : Bits.t) =
    *   let ones = Bits.to_int ones in
-   *   if ones mod 8 != 0 then
+   *   if ones mod 8 <> 0 then
    *     failwith "Bitstr.Bit.one_padding: error, can only pad modulo 8"
    *   else
    *     let ff_chars_num = ones / 8 in

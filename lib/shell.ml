@@ -42,13 +42,13 @@ let cat filename =
   "cat "^filename
 
 let screen command =
-  Printf.sprintf "screen -dm %s" command
+  Printf.sprintf "screen -d -m %s" command
 
 let which command =
   Printf.sprintf "which %s" command
 
 let exists file =
-  Printf.sprintf "test -e %s" file
+  Printf.sprintf "command -v %s" file
 
 let flush_stdout channel =
   ignore (Raw.Channel.read_timeout channel false 300)

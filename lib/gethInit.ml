@@ -13,9 +13,12 @@ struct
   type config = {
     chain_id        : int;
 
-    homestead_block : block_id;  (* block from which the protocol will be "homestead" *)
-    eip155_block    : block_id;  (* https://github.com/ethereum/EIPs/issues/155 *)
-    eip158_block    : block_id;  (* https://github.com/ethereum/EIPs/issues/158 *)
+    (* block from which the protocol will be "homestead" *)
+    homestead_block : block_id;
+    (* https://github.com/ethereum/EIPs/issues/155 *)
+    eip155_block    : block_id;
+    (* https://github.com/ethereum/EIPs/issues/158 *)
+    eip158_block    : block_id;
     (* ... there are probably other such ad-hoc parameters, cf the DAO *)
   }    
 
@@ -92,42 +95,36 @@ struct
 
   let to_json : t -> Yojson.Basic.json =
     fun block ->
-    let config = ("config", `Assoc [
-        ("chainId", `Int block.config.chain_id);
-        ("homesteadBlock", `Int block.config.homestead_block);
-        ("eip155Block", `Int block.config.eip155_block);
-        ("eip158Block", `Int block.config.eip158_block)
-      ]) in
-    let alloc =
-      let balances = List.map (fun (addr, wei) ->
-          (address_to_string addr, `Assoc [ ("balance", `String (string_of_int wei)) ])
-        ) block.alloc
+      let config = ("config", `Assoc [
+          ("chainId", `Int block.config.chain_id);
+          ("homesteadBlock", `Int block.config.homestead_block);
+          ("eip155Block", `Int block.config.eip155_block);
+          ("eip158Block", `Int block.config.eip158_block)
+        ]) in
+      let alloc =
+        let balances =
+          List.map (fun (addr, wei) ->
+              let addr = address_to_string addr in
+              let bal  = string_of_int wei in
+              (addr, `Assoc [ ("balance", `String bal) ])
+          ) block.alloc
+        in
+        ("alloc", `Assoc balances)
       in
-      ("alloc", `Assoc balances)
-    in
-    `Assoc [
-      config;
-      alloc;
-      ("coinbase", `String (address_to_string block.coinbase));
-      ("difficulty", `String (hex_of_int block.difficulty));
-      ("extraData", `String block.extra_data);
-      ("gasLimit", `String (hex_of_int block.gas_limit));
-      ("nonce", `String (hex_of_int block.nonce));
-      ("mixhash", `String (hash256_to_string block.mix_hash));
-      ("parentHash", `String (hash256_to_string block.parent_hash));
-      ("timestamp", `String (hex_of_int block.timestamp))
-    ]
+      `Assoc [
+        config;
+        alloc;
+        ("coinbase", `String (address_to_string block.coinbase));
+        ("difficulty", `String (hex_of_int block.difficulty));
+        ("extraData", `String block.extra_data);
+        ("gasLimit", `String (hex_of_int block.gas_limit));
+        ("nonce", `String (hex_of_int block.nonce));
+        ("mixhash", `String (hash256_to_string block.mix_hash));
+        ("parentHash", `String (hash256_to_string block.parent_hash));
+        ("timestamp", `String (hex_of_int block.timestamp))
+      ]
 
 end
-
-type geth_config = {
-  genesis_block  : Genesis.t;
-  network_id     : int;
-  root_directory : string;
-  data_subdir    : string;
-  source_subdir  : string;
-  (* TODO: geth command line options *)
-}
 
 (* Initializing an Ethereum network with Geth
 
@@ -169,7 +166,8 @@ struct
     | Exec of string (* javascript statement *)
     | IpcPath of string (* foo/bar/baz.ipc *)
     | Rpc of { rpcport : int; rpcaddr : string; rpcapis : string }
-    | Port of int
+    | Port of int (* p2p port *)
+    | DagDir of string
 
   type command =
     | Init of string (* json file *)
@@ -192,10 +190,14 @@ struct
     | IpcPath s ->
       sprintf "--ipcpath \"%s\"" s
     | Rpc { rpcport; rpcaddr; rpcapis } ->
-      sprintf "--rpc --rpcaddr %s --rpcport %d --rpcapi %s" rpcaddr rpcport rpcapis
+      sprintf
+        "--rpc --rpcaddr %s --rpcport %d --rpcapi %s"
+        rpcaddr rpcport rpcapis
     | Port port ->
       sprintf "--port %d" port
-        
+    | DagDir path ->
+      sprintf "--ethash.dagdir \"%s\"" path
+
   let make (options : geth_option list) (command : command option) =
     let option_str =
       options |> List.map string_of_option |> String.concat " "
@@ -215,10 +217,20 @@ struct
 
 end
 
+
+type geth_config = {
+  genesis_block  : Genesis.t;
+  network_id     : int;
+  root_directory : string;
+  data_subdir    : string;
+  source_subdir  : string;
+  rpc_port       : int;
+  p2p_port       : int;
+}
+
 type deploy_target = {
   ip_address : string;
   ssh_port   : int;
-  eth_port   : int;
   login      : string;
   password   : string
 }
@@ -230,21 +242,28 @@ exception Deploy_error of deploy_target
 
 (* Helper functions *)
 
+(* Execute a remote command and display the result locally *)
 let log_exec ?read_stderr ?read_timeout shell command =
   let res = Shell.execute ?read_stderr ?read_timeout shell command in
   Printf.eprintf "# %s > %s\n" (Shell.to_string command) res
 
+(* Execute a remote command, display and return the result locally *)
 let log_exec_return ?read_stderr ?read_timeout shell command =
   let res = Shell.execute ?read_stderr ?read_timeout shell command in
   Printf.eprintf "# %s > %s\n" (Shell.to_string command) res;
   res
 
+(* Execute a remote command, display the result and return the code *)
 let log_exec_code ?read_stderr ?read_timeout shell command =
   let res =
-    Shell.(execute ?read_stderr ?read_timeout shell (seq command (of_string "$?")))
+    let open Shell in
+    execute ?read_stderr ?read_timeout shell (seq command (of_string "$?"))
   in
   Printf.eprintf "# %s > %s\n" (Shell.to_string command) res;
-  int_of_string res
+  try int_of_string res with
+  | (Failure _) as e ->
+    Printf.eprintf "log_exec_code: cannot convert \"%s\" to integer code" res;
+    raise e
 
 (* -------------------------------------------------------------------------- *)
 (* Functions pertaining to configuration of the hosts *)
@@ -252,13 +271,14 @@ let log_exec_code ?read_stderr ?read_timeout shell command =
 
 (* The genesis block specification is converted to json then to string, then
    to a local file, then sent via scp to the remote host. *)
-
 let write_genesis genesis_block root_dir mode session =
   let local_genesis = Filename.temp_file "genesis" ".json" in
   File.with_file_out
     ~mode:[`create;`text]
     ~perm:(File.unix_perm mode) local_genesis (fun fd ->
-        let json_str = genesis_block |> Genesis.to_json |> Yojson.Basic.to_string in
+        let json_str =
+          genesis_block |> Genesis.to_json |> Yojson.Basic.to_string
+        in
         output_string fd json_str
       );
   Ssh_client.Easy.scp
@@ -267,6 +287,7 @@ let write_genesis genesis_block root_dir mode session =
     ~dst_path:(root_dir // "genesis.json")
     ~mode
 
+(* Login to a target and pass the resulting session to a provided function *)
 let login_target target f =
   let open Ssh_client in
   let options =
@@ -278,7 +299,7 @@ let login_target target f =
     } in
   Easy.with_password ~options ~password:target.password f
 
-
+(* Parse enode back *)
 let parse_enode raw_enode =
   let enode_start =
     try Str.search_forward (Str.regexp_string "enode") raw_enode 0
@@ -304,65 +325,11 @@ let port_is_free shell port =
   let result  = Shell.execute ~read_timeout:300 shell command in
   String.is_empty result
 
-(* let port_is_free_on_host port target =
- *   login_target target (fun session ->
- *       Ssh_client.Easy.with_shell_channel ~session (fun shell greet_string ->
- *           port_is_free shell port
- *         )
- *     ) *)
-
-(* let start_no_discover geth_cfg target =
- *   let create_directories shell =
- *     let exec = log_exec shell in
- *     List.iter exec [
- *       Shell.of_string "echo $0";
- *       Shell.mkdir geth_cfg.root_directory;
- *       Shell.cd geth_cfg.root_directory;
- *       Shell.mkdir geth_cfg.data_subdir;
- *       Shell.mkdir geth_cfg.source_subdir;
- *       Shell.touch "geth.ipc"
- *     ]
- *   in
- *   let init =    
- *     Geth.(make [Datadir geth_cfg.data_subdir] (Some (Init "genesis.json")))
- *   in
- *   let boot =
- *     (\* ipc_file is used to attach the console *\)
- *     let ipc_file = "geth.ipc" in
- *     let cmd =
- *       Geth.(make [Datadir geth_cfg.data_subdir;
- *                   Nodiscover;
- *                   NetworkId geth_cfg.network_id;
- *                   Verbosity 6;
- *                   IpcPath ipc_file;
- *                   Rpc { rpcport = 8545; rpcaddr = "localhost"; rpcapis = "admin,web3,eth,personal,miner,net" }
- *                  ] None)
- *     in
- *     Shell.(screen cmd)
- *   in
- *   let get_enode =
- *     let rpc_addr = "http://localhost:8545" in
- *     Geth.(make [Exec "admin.nodeInfo.enode"] (Some (Attach (Some rpc_addr))))
- *   in
- *   let enode =
- *     login_target target (fun session ->
- *         Ssh_client.Easy.with_shell_channel ~session (fun shell greet_string ->
- *             create_directories shell;
- *             write_genesis geth_cfg.genesis_block geth_cfg.root_directory 0o640 session;
- *             log_exec shell init;
- *             log_exec ~read_stderr:true shell boot;
- *             log_exec_return ~read_timeout:500  shell get_enode
- *           )
- *       )
- *   in
- *   (\* remove initial and trailing noise *\)
- *   let enode = parse_enode enode in
- *   (\* substitute ip address back in enode *\)
- *   Str.replace_first (Str.regexp_string "[::]") target.ip_address enode *)
-
-let add_peers target peers =
+let add_peers (geth_config, target) peers =
   let add_peer enode =
-    let rpc_addr = "http://localhost:8545" in
+    let rpc_addr =
+      Printf.sprintf "http://localhost:%d" geth_config.rpc_port
+    in
     let js_cmd   = Printf.sprintf "admin.addPeer(%s)" enode in
     Geth.(make [Exec js_cmd] (Some (Attach (Some rpc_addr))))
   in
@@ -372,29 +339,29 @@ let add_peers target peers =
         )
     )
 
-let revert_deploy geth_config target =
+let revert_deploy (geth_config, target) =
   login_target target (fun session ->
       Ssh_client.Easy.with_shell_channel ~session (fun shell greet_string ->
-          (* I should rather get the PIDs of the running processes, this is just ugly... *)              
+          (* I should rather get the PIDs of the running processes, 
+             this is just ugly. *)
           log_exec shell (Shell.of_string "killall geth");
-          log_exec shell (Shell.rm_fr geth_config.root_directory);
-          log_exec shell (Shell.rm_fr "~/.ethereum");          
+          log_exec shell (Shell.rm_fr geth_config.root_directory)
         )
     )
 
 
-let prepare_target geth_cfg target =
+let prepare_target =
 
   let tools_are_available shell =
-    let screen_code = log_exec_code shell (Shell.exists "screen") in
-    let geth_code   = log_exec_code shell (Shell.exists "geth") in
-    screen_code = 0 && geth_code = 0
+    let screen_res = log_exec_return shell (Shell.exists "screen") in
+    let geth_res  = log_exec_return shell (Shell.exists "geth") in
+    screen_res <> "" && geth_res <> ""
   in
-  
-  let create_directories shell =
+  let create_directories geth_cfg shell =
     let exec = log_exec shell in
     List.iter exec [
-      Shell.of_string "echo $0";
+      (* this is to print the shell - just a useful debug info *)
+      Shell.of_string "echo -n $0"; 
       Shell.mkdir geth_cfg.root_directory;
       Shell.cd geth_cfg.root_directory;
       Shell.mkdir geth_cfg.data_subdir;
@@ -402,12 +369,11 @@ let prepare_target geth_cfg target =
       Shell.touch "geth.ipc"
     ]
   in
-
-  let geth_init =    
+  let geth_init geth_cfg =
     Geth.(make [Datadir geth_cfg.data_subdir] (Some (Init "genesis.json")))
   in
-
-  let geth_start =
+  let geth_start geth_cfg =
+    Printf.eprintf "Starting Geth node...\n";
     (* ipc_file is used to attach the console *)
     let ipc_file = "geth.ipc" in
     let cmd =
@@ -416,60 +382,78 @@ let prepare_target geth_cfg target =
                   NetworkId geth_cfg.network_id;
                   Verbosity 6;
                   IpcPath ipc_file;
-                  Rpc { rpcport = 8545; rpcaddr = "localhost"; rpcapis = "admin,web3,eth,personal,miner,net" };
-                  Port target.eth_port
+                  Rpc { rpcport = geth_cfg.rpc_port;
+                        rpcaddr = "localhost";
+                        rpcapis = "admin,web3,eth,personal,miner,net,txpool" };
+                  Port geth_cfg.p2p_port;
+                  (* DagDir "ethash" *)
                  ] None)
     in
-    Shell.(screen cmd)
-  in
-
-  let get_enode =
-    let rpc_addr = "http://localhost:8545" in
+    Shell.screen cmd
+  in  
+  let get_enode geth_cfg =
+    let rpc_addr =
+      Printf.sprintf "http://localhost:%d" geth_cfg.rpc_port
+    in
     Geth.(make [Exec "admin.nodeInfo.enode"] (Some (Attach (Some rpc_addr))))
   in
+  
+  fun (geth_cfg, target) ->
+    Printf.eprintf
+      "Configuring target %s@%s\n%!"
+      target.login target.ip_address;
+    let enode =
+      login_target target (fun session ->
+          Ssh_client.Easy.with_shell_channel ~session (fun shell greet_string ->
+              Printf.eprintf
+                "Checking whether remote host has required capabilities...\n";
+              if not (tools_are_available shell) then
+                raise (Deploy_error target);
+              if not (port_is_free shell geth_cfg.p2p_port) then
+                raise (Deploy_error target);
 
-  let enode =
-  login_target target (fun session ->
-      Ssh_client.Easy.with_shell_channel ~session (fun shell greet_string ->
-          if not (tools_are_available shell) then
-            raise (Deploy_error target);
-          if not (port_is_free shell target.eth_port) then
-            raise (Deploy_error target);
+              Printf.eprintf "Cleaning existing Geth artifacts...\n";
+              log_exec shell (Shell.of_string "killall geth");
+              log_exec shell (Shell.rm_fr geth_cfg.root_directory);
+              log_exec shell (Shell.rm_fr "~/.ethereum");
 
-          log_exec shell (Shell.of_string "killall geth");
-          log_exec shell (Shell.rm_fr geth_cfg.root_directory);
-          log_exec shell (Shell.rm_fr "~/.ethereum");
+              Printf.eprintf "Creating directories...\n";
+              create_directories geth_cfg shell;
 
-          create_directories shell;
+              Printf.eprintf "Uploading genesis file...\n";
+              write_genesis
+                geth_cfg.genesis_block geth_cfg.root_directory 0o640 session;
 
-          write_genesis geth_cfg.genesis_block geth_cfg.root_directory 0o640 session;
-
-          log_exec shell geth_init;
-          log_exec ~read_stderr:true shell geth_start;
-          log_exec_return ~read_timeout:500 shell get_enode
+              Printf.eprintf "Initializing and starting Geth...\n";
+              log_exec shell (geth_init geth_cfg);
+              log_exec ~read_stderr:true shell (geth_start geth_cfg);
+              log_exec_return ~read_timeout:500 shell (get_enode geth_cfg)
+            )
         )
-    )
-  in
-  (* remove initial and trailing noise *)
-  let enode = parse_enode enode in
-  (* substitute ip address back in enode *)
-  Str.replace_first (Str.regexp_string "[::]") target.ip_address enode
+    in
+    (* remove initial and trailing noise *)
+    let enode = parse_enode enode in
+    (* substitute ip address back in enode *)
+    Str.replace_first (Str.regexp_string "[::]") target.ip_address enode
 
 
-let configure_step geth_config network =
+let configure_step network =
   try
-    List.map (prepare_target geth_config) network
+    List.map prepare_target network
   with
   | Deploy_error target ->
-    (Printf.eprintf "Configuration failed for host %s - aborting\n%!" target.ip_address;
-     List.iter (revert_deploy geth_config) network;
+    (Printf.eprintf
+       "Configuration failed for host %s - aborting\n%!"
+       target.ip_address;
+     List.iter revert_deploy network;
      exit 1)
   | exn ->
-    (Printf.eprintf "Unexpected exception caught during network configuration - aborting\n%!";
-     List.iter (revert_deploy geth_config) network;
+    (Printf.eprintf
+       "Unexpected exception caught during network configuration, aborting\n%!";
+     List.iter revert_deploy network;
      raise exn)
-    
-let startup_step geth_config network map =
+
+let startup_step network map =
   try
     List.iter (fun (target, enode) ->
         let all_peers_except_target =
@@ -480,108 +464,19 @@ let startup_step geth_config network map =
       ) map
   with
   | Deploy_error target ->
-    (Printf.eprintf "Adding peers failed for host %s - aborting\n%!" target.ip_address;      
+    (Printf.eprintf
+       "Adding peers failed for host %s - aborting\n%!"
+       target.ip_address;
      (* List.iter (revert_add_peers geth_config) network; *)
-     List.iter (revert_deploy geth_config) network;
+     List.iter revert_deploy network;
      exit 1)
 
-let deploy geth_config network =
-  let enodes = configure_step geth_config network in
+let deploy network =
+  let enodes = configure_step network in
   Printf.printf "All nodes successfuly configured. Inode map:\n%!";
   let map = List.combine network enodes in
-  List.iter (fun (target, enode) ->
+  List.iter (fun ((_, target), enode) ->
       Printf.printf "%s -> %s\n" target.ip_address enode
     ) map;
   Printf.printf "Adding peers...\n%!";
-  startup_step geth_config network map
-
-(*
-   Clean slate
-*)
-
-(* Geth Deploy. Two dimensions: bootnode/nodiscover, consensus alg.
-   I. in /nodiscover/ mode, POW
-   
-   phase 1: prepare
-   a. check that all shell tools are available: screen, geth
-   b. check that ports cfg.eth_port and RPC port 8545 are free
-   c. kill all existing running geth processes
-   d. clean all ethereumm dirs., including ~/.ethereum
-   e. create ~/root_directory, etc
-   f. create genesis.json
-   g. geth --init
-   h. start geth node
-
-   phase 2: deploy, input: enode list
-   b. add peers
-   c. check that peers are present
-*)
-  
-    
-(* let geth_init datadir =
- *   let command =
- *     Printf.sprintf "geth --datadir=\"%s\" init \"genesis.json\"" datadir
- *   in
- *   Shell.of_string command
- * 
- * let geth_start ?(verbosity=6) boot_enode =
- *   let command =
- *     Printf.sprintf "geth --bootnodes=\"%s\" --verbosity=%d 2> geth.error > geth.log" boot_enode verbosity
- *   in
- *   Shell.of_string command
- * 
- * let geth_start ?(verbosity=6) boot_enode =
- *   let command =
- *     Printf.sprintf "geth --bootnodes=\"%s\" --verbosity=%d 2> geth.error > geth.log" boot_enode verbosity
- *   in
- *   Shell.of_string command *)
-
-(* -------------------------------------------------------------------------- *)
-(* Wrap Shell.execute so that we have a feedback on what has been executed and
-   what was produced on the remote stdout. *)
-
-(* -------------------------------------------------------------------------- *)
-(* Populating remote hosts with config files & starting geth nodes are taken
-   care of by the following functions. *)
-
-
-
-(* let extract_enode string =
- *   let enode_start =
- *     try Str.search_forward (Str.regexp_string "enode") string 0
- *     with Not_found ->
- *       failwith ("Enode not found in " ^ string)
- *   in
- *   let enode_addr = Str.string_after string enode_start in
- *   (\* Remove trailing "\n" *\)
- *   String.strip enode_addr *)
-
-(* Starts a bootnode and returns the bootnode address.
-   Assume [bootnode_port] is free. *)
-(* let start_bootnode ~ssh_session ~root_directory ~bootnode_port =
- *   let bootnode_key = "bootnode.key" in (\* file containing private key *\)
- *   Ssh.Client.with_shell (fun channel ->
- *       Shell.flush_stdout channel;
- *       let exec = log_exec channel in
- *       List.iter exec [
- *         Shell.mkdir root_directory;
- *         Shell.of_string "pwd";
- *         Shell.cd root_directory;
- *         Shell.of_string "pwd";
- *         bootnode_genkey bootnode_key
- *       ];
- *       let bootnode_info =
- *         Shell.execute
- *           ~read_stderr:true
- *           ~timeout:300
- *           channel
- *           (bootnode_nodekey bootnode_port bootnode_key)
- *       in
- *       extract_enode bootnode_info
- *     ) ssh_session
- * 
- * let killall ~ssh_session ~process =
- *   Ssh.Client.with_shell (fun channel ->
- *       Shell.flush_stdout channel;
- *       log_exec channel (Shell.of_string ("killall "^process))
- *     ) ssh_session *)
+  startup_step network map
