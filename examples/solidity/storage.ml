@@ -76,6 +76,7 @@ struct
       ~arguments:ABI.([ uint256_val 0x123456L;
                         string_val "This is a test"
                       ])
+      ~value:None
  
   let storage_ctx_address =
     match deploy_receipt.Types.Tx.contract_address with
@@ -111,6 +112,7 @@ struct
           ~src:X.account
           ~ctx:storage_ctx_address
           ~gas:(Z.of_int 99999)
+          ~value:None
       in
       ABI.Decode.decode_events ctx.abi receipt
         
@@ -129,6 +131,7 @@ struct
         ~src:X.account
         ~ctx:storage_ctx_address
         ~gas:(Z.of_int 99999)
+        ~value:None
 
   (* let _ = 
    *   if

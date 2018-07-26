@@ -1,5 +1,7 @@
 open Ocaml_geth
 
+(* TODO obsolete!!! *)
+
 let genesis =
   GethInit.Genesis.({
       config = {

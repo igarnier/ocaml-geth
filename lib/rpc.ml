@@ -46,7 +46,6 @@ let rpc_call uri method_name (params : Json.json) =
   print_debug ans;
   Json.from_string ans
 
-
 (* https://github.com/ethereum/wiki/wiki/JSON-RPC#json-rpc-api-reference *)
 
 module Get = Json.GetExn
@@ -183,7 +182,7 @@ struct
     in
     loop ()
 
-  let send_contract_and_get_receipt ~uri ~src ~data ~gas =
+  let send_contract_and_get_receipt ~uri ~src ~data ~gas () =
     let open Tx in
     let tx =
       {
@@ -197,9 +196,58 @@ struct
       }
     in
     send_transaction_and_get_receipt ~uri ~transaction:tx
-      
-end
+
+  let send_contract_and_get_receipt ~uri ~src ~data ~gas ?value () =
+    let open Tx in
+    let tx =
+      {
+        src;
+        dst   = None;
+        gas   = Some gas;
+        gas_price = None;
+        value;
+        data  = Bitstr.Hex.as_string data;
+        nonce = None
+      }
+    in
+    send_transaction_and_get_receipt ~uri ~transaction:tx
   
+end
+
+module EthLwt =
+struct
+
+    let send_transaction_and_get_receipt ~uri ~transaction =
+    let hash = Eth.send_transaction ~uri ~transaction in
+    let rec loop () =
+      match Eth.get_transaction_receipt ~uri ~transaction_hash:hash with
+      | None ->
+        Lwt_unix.sleep 2.0;%lwt
+        loop ()
+      | Some receipt ->
+        Lwt.return receipt
+      | exception err ->
+        Lwt_io.eprintf "send_transaction_and_get_receipt: error in get_transaction_receipt\n";%lwt
+        Lwt.fail err
+    in
+    loop ()
+
+    let send_contract_and_get_receipt ~uri ~src ~data ~gas () =
+    let open Tx in
+    let tx =
+      {
+        src;
+        dst   = None;
+        gas   = Some gas;
+        gas_price = None;
+        value = None;
+        data  = Bitstr.Hex.as_string data;
+        nonce = None
+      }
+    in
+    send_transaction_and_get_receipt ~uri ~transaction:tx
+  
+end
   
 module Personal =
 struct

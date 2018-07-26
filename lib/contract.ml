@@ -352,7 +352,6 @@ struct
            taking into account header size. *)
         let _, offsets =
           List.fold_left (fun (offset, acc) bitstr ->
-              let _ = Printf.printf "offset for %s: %d bytes\n" Bitstr.(Hex.as_string (uncompress bitstr)) (Bytes.to_int offset) in
               let byte_len = bits_to_bytes (Bitstr.Bit.length bitstr) in
               let next_offset = Bytes.(offset + byte_len) in
               (next_offset, offset :: acc)
@@ -728,32 +727,34 @@ struct
       ) None ctx.abi
   
   let deploy_rpc
-      ~(uri : string)
-      ~(account : Types.address)
-      ~(gas : Z.t)
-      ~(contract : solidity_output)
-      ~(arguments : ABI.value list) =
+      ~(uri:string)
+      ~(account:Types.address)
+      ~(gas:Z.t)
+      ~(contract:solidity_output)
+      ~(arguments:ABI.value list)
+      ~(value:Z.t option) =
     let prepare_constructor ctx =
       let constr_abi = get_constructor ctx in
       let inputs     = constr_abi.ABI.c_inputs in
-      List.iter2 (fun v t -> 
-          if not (ABI.type_of v = t.ABI.arg_type) then
-            (let typeof_v = SolidityTypes.print (ABI.type_of v) in
-             let arg_typ  = SolidityTypes.print t.ABI.arg_type in
-             failwith ("deploy_rpc: constructor argument types do not match constructor declaration: "^typeof_v^" vs "^arg_typ)
-            )
-        ) arguments inputs;
       let encoded = 
         match arguments with
         | [] ->
           Bitstring.empty_bitstring
         | _  ->
-          ABI.(Encode.encode (ABI.tuple_val arguments)) 
+          (List.iter2 (fun v t -> 
+               if not (ABI.type_of v = t.ABI.arg_type) then
+                 (let typeof_v = SolidityTypes.print (ABI.type_of v) in
+                  let arg_typ  = SolidityTypes.print t.ABI.arg_type in
+                  failwith ("deploy_rpc: constructor argument types do not match constructor declaration: "^typeof_v^" vs "^arg_typ)
+                 )
+             ) arguments inputs;
+           ABI.(Encode.encode (ABI.tuple_val arguments))
+          )
       in
       Bitstr.(uncompress (Bit.concat [ctx.bin; encoded]))
     in
     let deploy data =
-      Rpc.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ~gas
+      Rpc.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ~gas ()
     in
     let rec loop ctxs =
       match ctxs with
@@ -769,11 +770,13 @@ struct
     loop contract.contracts
 
   let call_method_tx
-      ~(abi : ABI.method_abi)
-      ~(arguments : ABI.value list)
-      ~(src : Types.address)
-      ~(ctx : Types.address)
-      ~(gas : Z.t) =
+      ~(abi:ABI.method_abi)
+      ~(arguments:ABI.value list)
+      ~(src:Types.address)
+      ~(ctx:Types.address)
+      ~(gas:Z.t)
+      ~(value:Z.t option)
+    =
       let mname = abi.m_name in
       let inputs = abi.ABI.m_inputs in
       let siglen = List.length inputs in
@@ -785,14 +788,21 @@ struct
         failwith m
       else
         let method_id = ABI.method_id abi in
+        Printf.printf "calling method %s with code %s\n%!" mname (Bitstr.Hex.as_string (Bitstr.uncompress method_id));
         let encoded = ABI.(Encode.encode (ABI.tuple_val arguments)) in        
         let bitstring = Bitstr.Bit.concat [method_id; encoded] in
         let data = Bitstr.(Hex.as_string (uncompress bitstring)) in
         {
-          Types.Tx.src; dst = Some ctx;  gas = Some gas; gas_price = None; value = None; data; nonce = None
+          Types.Tx.src; 
+          dst = Some ctx; 
+          gas = Some gas; 
+          gas_price = None; 
+          value; 
+          data; 
+          nonce = None
         }
 
-  let call_void_method_tx ~mname ~(src : Types.address) ~(ctx : Types.address) ~(gas : Z.t) =
+  let call_void_method_tx ~mname ~(src:Types.address) ~(ctx:Types.address) ~(gas:Z.t) =
       let method_id = ABI.keccak_4_bytes mname in
       let data = Bitstr.(Hex.as_string (uncompress method_id)) in
       {
@@ -805,8 +815,9 @@ struct
       ~(arguments:ABI.value list)
       ~(src:Types.address)
       ~(ctx:Types.address)
-      ~(gas:Z.t) =
-    let tx = call_method_tx ~abi ~arguments ~src ~ctx ~gas in
+      ~(gas:Z.t)
+      ~(value:Z.t option) =
+    let tx = call_method_tx ~abi ~arguments ~src ~ctx ~gas ~value in
     Rpc.Eth.send_transaction_and_get_receipt ~uri ~transaction:tx
 
   let call_method
@@ -815,7 +826,20 @@ struct
       ~(arguments:ABI.value list)
       ~(src:Types.address)
       ~(ctx:Types.address)
-      ~(gas:Z.t) =
-    let tx = call_method_tx ~abi ~arguments ~src ~ctx ~gas in        
+      ~(gas:Z.t)
+      ~(value:Z.t option) =
+    let tx = call_method_tx ~abi ~arguments ~src ~ctx ~gas ~value in        
     Rpc.Eth.call ~uri ~transaction:tx ~at_time:`latest
+
+  let execute_method_lwt
+      ~(uri:string)
+      ~(abi:ABI.method_abi)
+      ~(arguments:ABI.value list)
+      ~(src:Types.address)
+      ~(ctx:Types.address)
+      ~(gas:Z.t)
+      ~(value:Z.t option) =
+    let tx = call_method_tx ~abi ~arguments ~src ~ctx ~gas ~value in
+    Rpc.EthLwt.send_transaction_and_get_receipt ~uri ~transaction:tx
+
 end

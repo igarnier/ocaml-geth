@@ -1,4 +1,4 @@
-type literal
+type literal = string
 
 type instr_code =
   | STOP 

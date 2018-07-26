@@ -1,6 +1,8 @@
 open Ocaml_geth
 open Rpc
 
+(* TODO obsolete!!!*)
+
 (* The RPC ports will typically be blocked from outside (they really should, for
    obvious security reasons). *)
 let uri = "http://localhost:8545"

@@ -132,12 +132,16 @@ sig
     account:Types.address ->
     gas:Z.t ->
     contract:solidity_output ->
-    arguments:ABI.value list -> Types.Tx.receipt
+    arguments:ABI.value list ->
+    value:Z.t option ->
+    Types.Tx.receipt
+
   val call_method_tx :
     abi:ABI.method_abi ->
     arguments:ABI.value list ->
     src:Types.address ->
-    ctx:Types.address -> gas:Z.t -> Types.Tx.t
+    ctx:Types.address -> gas:Z.t -> value:Z.t option -> Types.Tx.t
+
   val call_void_method_tx :
     mname:string ->
     src:Types.address ->
@@ -148,14 +152,21 @@ sig
     abi:ABI.method_abi ->
     arguments:ABI.value list ->
     src:Types.address ->
-    ctx:Types.address -> gas:Z.t -> Types.Tx.receipt
+    ctx:Types.address -> gas:Z.t -> value:Z.t option -> Types.Tx.receipt
 
+  val execute_method_lwt :
+    uri:string ->
+    abi:ABI.method_abi ->
+    arguments:ABI.value list ->
+    src:Types.address ->
+    ctx:Types.address -> gas:Z.t -> value:Z.t option -> Types.Tx.receipt Lwt.t
+  
   val call_method :
     uri:string ->
     abi:ABI.method_abi ->
     arguments:ABI.value list ->
     src:Types.address ->
-    ctx:Types.address -> gas:Z.t -> string
+    ctx:Types.address -> gas:Z.t -> value:Z.t option -> string
  
 
 end  
