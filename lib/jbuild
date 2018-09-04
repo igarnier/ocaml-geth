@@ -6,5 +6,5 @@
   (ocamlopt_flags (-g))
   (ocamlc_flags (-g))
   (libraries (batteries yojson netclient ssh-client cryptokit zarith hex bitstring lwt lwt.unix))
-  (preprocess (pps (bitstring.ppx lwt_ppx)))
+  (preprocess (pps (bitstring.ppx lwt_ppx ppx_deriving.show ppx_deriving.eq)))
 ))

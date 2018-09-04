@@ -8,10 +8,11 @@ let debug_flag = ref true
 
 let switch_debug () =
   debug_flag := not !debug_flag
-
+      
 let print_debug s =
   if !debug_flag then
-    print_endline s
+    ()
+    (* print_endline s *)
   else
     ()
 
@@ -86,7 +87,7 @@ struct
     rpc_call uri "eth_syncing" `Null |> Get.bool
 
   let coinbase ~uri =
-    rpc_call uri "eth_coinbase" `Null |> Get.string |> address_from_string
+    rpc_call uri "eth_coinbase" `Null |> Get.string |> Address.from_string
 
   let mining ~uri =
     rpc_call uri "eth_mining" `Null |> Get.bool
@@ -100,28 +101,28 @@ struct
   let accounts ~uri =
     rpc_call uri "eth_accounts" `Null
     |> Get.string_list
-    |> List.map address_from_string
+    |> List.map Address.from_string
 
   let block_number ~uri =
     rpc_call uri "eth_blockNumber" `Null |> Get.int_as_string
 
   let get_balance ~uri ~address ~(at_time : time) =
     let time = time_to_json at_time in
-    let params = `List [ `String (address_to_string address); time ] in
+    let params = `List [ `String (Address.show address); time ] in
     rpc_call uri "eth_getBalance" params |> Get.bigint_as_string
 
   let get_storage_at ~uri ~address ~position ~(at_time : time) =
     let time = time_to_json at_time in
-    let params = `List [ `String (address_to_string address); `String (Z.to_string position); time ] in
+    let params = `List [ `String (Address.show address); `String (Z.to_string position); time ] in
     rpc_call uri "eth_getStorageAt" params |> Get.string
 
   let get_transaction_count ~uri ~address ~(at_time : time) =
     let time = time_to_json at_time in
-    let params = `List [ `String (address_to_string address); time ] in
+    let params = `List [ `String (Address.show address); time ] in
     rpc_call uri "eth_getTransactionCount" params |> Get.int
 
   let get_transaction_count_by_hash ~uri ~block_hash =
-    let args = `List [`String (hash256_to_string block_hash)] in
+    let args = `List [`String (Hash256.show block_hash)] in
     rpc_call uri "eth_getTransactionCountByHash" args |> Get.int
 
   let get_transaction_count_by_number ~uri ~(at_time : time) =
@@ -131,11 +132,11 @@ struct
   (* eth_getUncleCountByBlockHash, eth_getUncleCountByBlockNumber *)
 
   let get_code ~uri ~address ~(at_time : time) =
-    let params = `List [ `String (address_to_string address); time_to_json at_time ] in
+    let params = `List [ `String (Address.show address); time_to_json at_time ] in
     rpc_call uri "eth_getCode" params |> Get.string (* TODO: it would be nice to parse it back to bytecode *)
 
   let get_block_by_hash ~uri ~block_hash =
-    let params = `List [ `String (hash256_to_string block_hash) ] in
+    let params = `List [ `String (Hash256.show block_hash) ] in
     rpc_call uri "eth_getBlockByHash" params
     |> Get.result
     |> Json.maybe Block.from_json
@@ -147,15 +148,15 @@ struct
     |> Json.maybe Block.from_json
   
   let sign ~uri ~address ~message =
-    rpc_call uri "eth_sign" (`List [`String (address_to_string address); `String message]) |> Get.string
+    rpc_call uri "eth_sign" (`List [`String (Address.show address); `String message]) |> Get.string
 
   let send_transaction ~uri ~transaction =
     let args = `List [Tx.to_json transaction] in
-    rpc_call uri "eth_sendTransaction" args |> Get.string |> hash256_from_string
+    rpc_call uri "eth_sendTransaction" args |> Get.string |> Hash256.from_string
       
   let send_raw_transaction ~uri ~data =
     let args = `List [`String data] in
-    rpc_call uri "eth_sendRawTransaction" args |> Get.string  |> hash256_from_string
+    rpc_call uri "eth_sendRawTransaction" args |> Get.string  |> Hash256.from_string
 
   let call ~uri ~transaction ~(at_time : time) =
     rpc_call uri "eth_call" (`List [ Tx.to_json transaction; time_to_json at_time ]) |> Get.string
@@ -164,7 +165,7 @@ struct
   (* getBlockByHash/byNumber, etc *)
   (* getTransactionReceipt *)
   let get_transaction_receipt ~uri ~transaction_hash =
-    rpc_call uri "eth_getTransactionReceipt" (`List [ `String (hash256_to_string transaction_hash) ])
+    rpc_call uri "eth_getTransactionReceipt" (`List [ `String (Hash256.show transaction_hash) ])
     |> Get.result
     |> Tx.receipt_from_json
 
@@ -255,25 +256,25 @@ struct
   let send_transaction ~uri ~src ~dst ~value ~src_pwd =
     (* let value = Bitstr.(hex_as_string (hex_of_bigint value)) in *)
     let args  =
-        `List [`Assoc [ ("from", `String (address_to_string src));
-                        ("to", `String (address_to_string dst));
+        `List [`Assoc [ ("from", `String (Address.show src));
+                        ("to", `String (Address.show dst));
                         ("value", Json.zhex value) ];
                `String src_pwd
               ]
     in
     rpc_call uri "personal_sendTransaction" args
     |> Get.string
-    |> hash256_from_string
+    |> Hash256.from_string
 
   let new_account ~uri ~passphrase =
     let args  = `List [`String passphrase] in
     rpc_call uri "personal_newAccount" args
     |> Get.string
-    |> address_from_string
+    |> Address.from_string
 
   let unlock_account ~uri ~account ~passphrase ~unlock_duration =
     let args  =
-      `List[`String (address_to_string account); `String passphrase; `Int unlock_duration]
+      `List[`String (Address.show account); `String passphrase; `Int unlock_duration]
     in
     assert (rpc_call uri "personal_unlockAccount" args |> Get.bool)
   
@@ -293,7 +294,7 @@ struct
     rpc_call uri "miner_stop" `Null |> Get.bool
 
   let set_ether_base ~uri ~address =
-    let args = `List [`String (address_to_string address)] in
+    let args = `List [`String (Address.show address)] in
     rpc_call uri "miner_setEtherbase" args |> Get.bool
 
 end

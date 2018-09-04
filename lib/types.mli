@@ -1,25 +1,46 @@
+open Sigs
+
+
 (** An Ethereum address corresponding to a private key k_r is the 
     rightmost truncation to 160 bit of a 256 bit Keccak hash
     of the corresponding ECDSA public key. Cf Yellow Paper. *)
 
 (** Addresses are 20 bytes long, 40 bytes in hex form + 0x. *)
-type address = Bitstr.Hex.t
+module Address :
+sig
+  type t = Bitstr.Hex.t
+  include Equalable with type t := t
+  include Showable with type t := t
+
+  val from_string : string -> t
+end
 
 (** hash256 are 32 bytes long, 64 bytes in hex form + 0x. *)
-type hash256 = Bitstr.Hex.t
+module Hash256 :
+sig
+  type t = Bitstr.Hex.t
+  include Equalable with type t := t
+  include Showable with type t := t
+
+  val from_string : string -> t
+end
 
 (** hash512 are 64 bytes long, 128 bytes in hex form + 0x. *)
-type hash512 = Bitstr.Hex.t
+module Hash512 :
+sig
+  type t = Bitstr.Hex.t
+  include Equalable with type t := t
+  include Showable with type t := t
 
+  val from_string : string -> t
+end
 
-val address_to_string   : address -> string
-val address_from_string : string -> address
+module Z :
+sig
+  include module type of Z with type t = Z.t
 
-val hash256_to_string   : hash256 -> string
-val hash256_from_string : string -> hash256
-
-val hash512_to_string   : hash512 -> string
-val hash512_from_string : string -> hash512
+  include Showable with type t := t
+end
 
 (** 10^18 Wei = 1 Ether. TODO: currently unused. *)
 type wei      = int
@@ -32,8 +53,8 @@ sig
 
   type t =
     {
-      src       : address;
-      dst       : address option;
+      src       : Address.t;
+      dst       : Address.t option;
       gas       : Z.t option;
       gas_price : Z.t option;
       value     : Z.t option;
@@ -44,38 +65,38 @@ sig
   type accepted =
     {
       tx : t;
-      block_hash   : hash256;
+      block_hash   : Hash256.t;
       block_number : int;
-      tx_hash      : hash256;
+      tx_hash      : Hash256.t;
       tx_index     : int
     }
 
   type receipt =
     {
-      block_hash          : hash256;
+      block_hash          : Hash256.t;
       block_number        : int;
-      contract_address    : address option;
+      contract_address    : Address.t option;
       cumulative_gas_used : Z.t;
       gas_used            : Z.t;
-      src                 : address;
-      dst                 : address option;
+      src                 : Address.t;
+      dst                 : Address.t option;
       logs                : log list;
       (* unused:
        * logs_bloom : string;
        * root : string; *)
-      transaction_hash    : hash256;
+      transaction_hash    : Hash256.t;
       transaction_index   : int
     }
 
   and log =
     {
-      log_address           : address;
-      log_topics            : hash256 list;
+      log_address           : Address.t;
+      log_topics            : Hash256.t list;
       log_data              : string; (* hex_string *)
       log_block_number      : int;
-      log_transaction_hash  : hash256;
+      log_transaction_hash  : Hash256.t;
       log_transaction_index : int;
-      log_block_hash        : hash256;
+      log_block_hash        : Hash256.t;
       log_index             : int;
       log_removed           : bool
     }
@@ -84,7 +105,9 @@ sig
 
   val to_json : t -> Json.json
 
-  val receipt_from_json : Json.json -> receipt option    
+  val receipt_from_json : Json.json -> receipt option
+
+  val show_receipt : receipt -> string
 
 end
 
@@ -117,15 +140,15 @@ sig
   type t =
     {
       number        : int option;
-      hash          : hash256 option;
-      parent_hash   : hash256;
+      hash          : Hash256.t option;
+      parent_hash   : Hash256.t;
       nonce         : int option;
-      sha3_uncles   : hash256;
+      sha3_uncles   : Hash256.t;
       logs_bloom    : string option;
-      transactions_root : hash256;
-      state_root    : hash256;
-      receipts_root : hash256;
-      miner         : address;
+      transactions_root : Hash256.t;
+      state_root    : Hash256.t;
+      receipts_root : Hash256.t;
+      miner         : Address.t;
       difficulty    : Z.t;
       total_difficulty : Z.t;
       extra_data    : string;
@@ -134,7 +157,7 @@ sig
       gas_used      : Z.t;
       timestamp     : Z.t;
       transactions  : Tx.accepted list;
-      uncles        : hash256 list
+      uncles        : Hash256.t list
     }
 
   val from_json : Json.json -> t
@@ -152,15 +175,15 @@ type port_info =
 type protocol_info =
     Eth of {
       difficulty : Z.t;
-      genesis    : hash256 option;
-      head       : hash256;
+      genesis    : Hash256.t option;
+      head       : Hash256.t;
       network    : int option
     }
 
 type node_info =
   {
     enode       : string;
-    id          : hash512;
+    id          : Hash512.t;
     ip          : string;
     listen_addr : string;
     name        : string;
@@ -177,7 +200,7 @@ type network_info =
 type peer =
   {
     caps      : string list;
-    id        : hash512;
+    id        : Hash512.t;
     name      : string;
     network   : network_info;
     protocols : protocol_info;
@@ -187,23 +210,23 @@ type peer_info = peer list
 
 type block_info =
   {
-    block_root     : hash256;
+    block_root     : Hash256.t;
     block_accounts : ba_info list
   }
 
 and ba_info =
   {
-    ba_account   : address;
+    ba_account   : Address.t;
     ba_balance   : Z.t;
     ba_code      : Evm.bytecode;
-    ba_code_hash : hash256;
+    ba_code_hash : Hash256.t;
     ba_nonce     : int;
-    ba_root      : hash256;
+    ba_root      : Hash256.t;
     ba_storage   : ba_storage
   }
 
 and ba_storage =
-  (hash256 * string) list
+  (Hash256.t * string) list
 
 (* TODO: txpool *)
 (* type txpool =

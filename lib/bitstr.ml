@@ -1,4 +1,3 @@
-open Batteries
 open Basic
 
 (* This is an external library whose name clashes with a module defined here. *)
@@ -8,6 +7,7 @@ module Hex =
 struct
 
   type t = string
+  [@@deriving eq, show]
 
   let char_is_hex = function
     | '0' .. '9'
@@ -26,7 +26,7 @@ struct
     if len < 2 then
       failwith "is_hex: string too short"
     else
-      let prefix = String.head x 2 in
+      let prefix = Batteries.String.head x 2 in
       (match prefix with
        | "0x" | "0X" ->
          loop 2 len x true
@@ -43,8 +43,8 @@ struct
       else 
         "0x0"^hexstr
 
-  let of_uint = of_ubigint % Z.of_int
-  let of_int64 = of_ubigint % Z.of_int64
+  let of_uint = Batteries.(of_ubigint % Z.of_int)
+  let of_int64 = Batteries.(of_ubigint % Z.of_int64)
 
   let of_bigint z =
     if Z.lt z Z.zero then
@@ -148,15 +148,15 @@ struct
       let str = Bitstring.string_of_bitstring s in
       (* Apply not to every char *)
       let str = String.map (fun c -> Char.chr ((lnot (Char.code c)) land 0xff)) str in
-      let str = String.rev str in
+      let str = Batteries.String.rev str in
       (* Z.of_bits str *)
       Z.(neg (add (of_bits str) one))
     else
       (* Positive number. Reving the string for endianness purposes. *)
-      Z.of_bits (String.rev (Bitstring.string_of_bitstring s))
+      Z.of_bits (Batteries.String.rev (Bitstring.string_of_bitstring s))
 
   let to_unsigned_bigint s =
-    Z.of_bits (String.rev (Bitstring.string_of_bitstring s))
+    Z.of_bits (Batteries.String.rev (Bitstring.string_of_bitstring s))
 
   let of_string =
     Bitstring.bitstring_of_string
@@ -215,6 +215,14 @@ struct
     let bits = Bits.to_int bits in
     (Bitstring.takebits bits s,
      Bitstring.dropbits bits s)
+
+  let equal = Bitstring.equals
+
+  let show = as_string
+
+  let pp fmt bitstr =
+    Format.pp_print_string fmt (show bitstr)
+  
 
   (* let of_char c =
    *   compress_ (Hex.of_char c)
@@ -296,7 +304,7 @@ end
 
 let compress_ (x : Hex.t) : string =
   assert (Hex.is_hex x);
-  let stripped = String.tail x 2 in
+  let stripped = Batteries.String.tail x 2 in
   try ExtHx.to_string (`Hex stripped)
   with Invalid_argument s ->
     raise (Invalid_argument (s^": "^x))

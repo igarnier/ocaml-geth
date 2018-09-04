@@ -5,6 +5,9 @@ sig
 
   type t = private string
 
+  include Sigs.Showable with type t := t
+  include Sigs.Equalable with type t := t
+
   val is_hex : string -> bool
 
   val of_int : int -> t
@@ -22,6 +25,10 @@ sig
 
   type t = Bitstring.bitstring
   type pad_direction = [ `left | `right ]
+
+  include Sigs.Showable with type t := t
+  include Sigs.Equalable with type t := t
+
                        
   val of_char : char -> t
   val of_int64 : int64 -> t

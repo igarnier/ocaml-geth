@@ -8,14 +8,14 @@ sig
   }
   type t = {
     config : config;
-    alloc : (Types.address * Types.wei) list;
-    coinbase : Types.address;
+    alloc : (Types.Address.t * Types.wei) list;
+    coinbase : Types.Address.t;
     difficulty : int;
     extra_data : string;
     gas_limit : int;
     nonce : int;
-    mix_hash : Types.hash256;
-    parent_hash : Types.hash256;
+    mix_hash : Types.Hash256.t;
+    parent_hash : Types.Hash256.t;
     timestamp : int;
   }
   val hex_of_int : int -> string

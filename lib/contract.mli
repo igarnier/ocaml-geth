@@ -40,7 +40,7 @@ sig
     | BigInt  of Z.t
     | Bool    of bool
     | String  of string
-    | Address of Types.address
+    | Address of Types.Address.t
     | Tuple   of value list
     | Func    of { selector : string; address : Bitstr.Hex.t }
 
@@ -84,7 +84,7 @@ sig
   val bytes_val : string -> value
   val bytes_val : string -> value
   val bool_val : bool -> value
-  val address_val : Types.address -> value
+  val address_val : Types.Address.t -> value
   val tuple_val : value list -> value
   val static_array_val : value list -> SolidityTypes.t -> value
   val dynamic_array_val : value list -> SolidityTypes.t -> value
@@ -96,7 +96,7 @@ sig
   sig
     val int64_as_uint256 : int64 -> Bitstr.Bit.t
     val int64_as_int256 : int64 -> Bitstr.Bit.t
-    val address : Types.address -> Bitstr.Bit.t
+    val address : Types.Address.t -> Bitstr.Bit.t
     val bytes_static : string -> Basic.Bytes.t -> Bitstr.Bit.t
     val bytes_dynamic : string -> Bitstr.Bit.t
     val encode : value -> Bitstr.Bit.t
@@ -129,7 +129,7 @@ sig
 
   val deploy_rpc :
     uri:string ->
-    account:Types.address ->
+    account:Types.Address.t ->
     gas:Z.t ->
     contract:solidity_output ->
     arguments:ABI.value list ->
@@ -139,34 +139,34 @@ sig
   val call_method_tx :
     abi:ABI.method_abi ->
     arguments:ABI.value list ->
-    src:Types.address ->
-    ctx:Types.address -> gas:Z.t -> value:Z.t option -> Types.Tx.t
+    src:Types.Address.t ->
+    ctx:Types.Address.t -> gas:Z.t -> value:Z.t option -> Types.Tx.t
 
   val call_void_method_tx :
     mname:string ->
-    src:Types.address ->
-    ctx:Types.address -> gas:Z.t -> Types.Tx.t
+    src:Types.Address.t ->
+    ctx:Types.Address.t -> gas:Z.t -> Types.Tx.t
 
   val execute_method :
     uri:string ->
     abi:ABI.method_abi ->
     arguments:ABI.value list ->
-    src:Types.address ->
-    ctx:Types.address -> gas:Z.t -> value:Z.t option -> Types.Tx.receipt
+    src:Types.Address.t ->
+    ctx:Types.Address.t -> gas:Z.t -> value:Z.t option -> Types.Tx.receipt
 
   val execute_method_lwt :
     uri:string ->
     abi:ABI.method_abi ->
     arguments:ABI.value list ->
-    src:Types.address ->
-    ctx:Types.address -> gas:Z.t -> value:Z.t option -> Types.Tx.receipt Lwt.t
+    src:Types.Address.t ->
+    ctx:Types.Address.t -> gas:Z.t -> value:Z.t option -> Types.Tx.receipt Lwt.t
   
   val call_method :
     uri:string ->
     abi:ABI.method_abi ->
     arguments:ABI.value list ->
-    src:Types.address ->
-    ctx:Types.address -> gas:Z.t -> value:Z.t option -> string
+    src:Types.Address.t ->
+    ctx:Types.Address.t -> gas:Z.t -> value:Z.t option -> string
  
 
 end  

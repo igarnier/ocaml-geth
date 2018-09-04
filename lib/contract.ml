@@ -105,7 +105,7 @@ struct
     | BigInt  of Z.t
     | Bool    of bool
     | String  of string
-    | Address of Types.address
+    | Address of Types.Address.t
     | Tuple   of value list
     | Func    of { selector : string; address : Bitstr.Hex.t }
 
@@ -200,7 +200,7 @@ struct
       typ  = SolidityTypes.address_t
     }
 
-  let address_val (v : Types.address) =
+  let address_val (v : Types.Address.t) =
     { 
       desc = Address v;
       typ  = SolidityTypes.address_t
@@ -303,7 +303,7 @@ struct
     let int64_as_int256 (i : int64) =
       Bitstr.Bit.of_bigint 256 (Z.of_int64 i)
 
-    let address (s : Types.address) =
+    let address (s : Types.Address.t) =
       let encoded = Bitstr.compress s in
       Bitstr.Bit.zero_pad_to ~dir:`left ~bits:encoded ~target_bits:(Bits.int 256)
 
@@ -728,7 +728,7 @@ struct
   
   let deploy_rpc
       ~(uri:string)
-      ~(account:Types.address)
+      ~(account:Types.Address.t)
       ~(gas:Z.t)
       ~(contract:solidity_output)
       ~(arguments:ABI.value list)
@@ -772,8 +772,8 @@ struct
   let call_method_tx
       ~(abi:ABI.method_abi)
       ~(arguments:ABI.value list)
-      ~(src:Types.address)
-      ~(ctx:Types.address)
+      ~(src:Types.Address.t)
+      ~(ctx:Types.Address.t)
       ~(gas:Z.t)
       ~(value:Z.t option)
     =
@@ -802,7 +802,7 @@ struct
           nonce = None
         }
 
-  let call_void_method_tx ~mname ~(src:Types.address) ~(ctx:Types.address) ~(gas:Z.t) =
+  let call_void_method_tx ~mname ~(src:Types.Address.t) ~(ctx:Types.Address.t) ~(gas:Z.t) =
       let method_id = ABI.keccak_4_bytes mname in
       let data = Bitstr.(Hex.as_string (uncompress method_id)) in
       {
@@ -813,8 +813,8 @@ struct
       ~(uri:string)
       ~(abi:ABI.method_abi)
       ~(arguments:ABI.value list)
-      ~(src:Types.address)
-      ~(ctx:Types.address)
+      ~(src:Types.Address.t)
+      ~(ctx:Types.Address.t)
       ~(gas:Z.t)
       ~(value:Z.t option) =
     let tx = call_method_tx ~abi ~arguments ~src ~ctx ~gas ~value in
@@ -824,8 +824,8 @@ struct
       ~(uri:string)
       ~(abi:ABI.method_abi)
       ~(arguments:ABI.value list)
-      ~(src:Types.address)
-      ~(ctx:Types.address)
+      ~(src:Types.Address.t)
+      ~(ctx:Types.Address.t)
       ~(gas:Z.t)
       ~(value:Z.t option) =
     let tx = call_method_tx ~abi ~arguments ~src ~ctx ~gas ~value in        
@@ -835,8 +835,8 @@ struct
       ~(uri:string)
       ~(abi:ABI.method_abi)
       ~(arguments:ABI.value list)
-      ~(src:Types.address)
-      ~(ctx:Types.address)
+      ~(src:Types.Address.t)
+      ~(ctx:Types.Address.t)
       ~(gas:Z.t)
       ~(value:Z.t option) =
     let tx = call_method_tx ~abi ~arguments ~src ~ctx ~gas ~value in

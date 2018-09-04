@@ -1,41 +1,53 @@
 open Batteries
 
-type address = Bitstr.Hex.t
-type hash256 = Bitstr.Hex.t
-type hash512 = Bitstr.Hex.t
+module Address =
+struct
+  type t = Bitstr.Hex.t
+  [@@deriving eq, show]
 
-let address_to_string = Bitstr.Hex.as_string
+  let from_string x =
+    if String.length x <> 42 || not (Bitstr.Hex.is_hex x) then
+      failwith "Address.from_string: input must be 20 bytes (40 hex chars) 0x-prefixed"
+    else
+      Bitstr.Hex.of_string x
+            
+end
 
-let address_from_string x =
-  if String.length x <> 42 || not (Bitstr.Hex.is_hex x) then
-    failwith "address_from_string: input must be 20 bytes (40 hex chars) 0x-prefixed"
-  else
-    Bitstr.Hex.of_string x
+module Hash256 =
+struct
+  type t = Bitstr.Hex.t
+  [@@deriving eq, show]
 
-let hash256_to_string = Bitstr.Hex.as_string
+  let from_string x =
+    if String.length x <> 66 || not (Bitstr.Hex.is_hex x) then
+      failwith "Hash256.from_string: input must be 32 bytes (64 hex chars) 0x-prefixed"
+    else
+      Bitstr.Hex.of_string x
+end
 
-let hash256_from_string (x : string) =
-  if String.length x <> 66 || not (Bitstr.Hex.is_hex x) then
-    failwith "hash256_from_string: input must be 32 bytes (64 hex chars) 0x-prefixed"
-  else
-    Bitstr.Hex.of_string x
+module Hash512 =
+struct
+  type t = Bitstr.Hex.t
+  [@@deriving eq, show]
 
-let hash512_to_string = Bitstr.Hex.as_string
+  let from_string x =
+    if String.length x <> 130 || not (Bitstr.Hex.is_hex x) then
+      failwith "Hash512.from_string: input must be 64 bytes (128 hex chars) 0x-prefixed"
+    else
+      Bitstr.Hex.of_string x
+end
 
-let hash512_from_string x =
-  let len = String.length x in
-  if len <> 130 || not (Bitstr.Hex.is_hex x) then
-    let open Printf in
-    let msg = sprintf "hash512_from_string: input must be 64 bytes (128 hex chars) 0x-prefixed.\
-                       Got %s, length %d instead." x len in
-    failwith msg
-  else
-    Bitstr.Hex.of_string x
+module Z =
+struct
+  include Z
+
+  let show = to_string
+  let pp   = pp_print
+end
 
 
 type wei       = int (* Z.t ? *)
 type block_id  = int (* Z.t ? *)
-
 
 let assoc key fields =
   try List.assoc key fields with
@@ -48,8 +60,8 @@ struct
   
   type t =
     {
-      src       : address;
-      dst       : address option;
+      src       : Address.t;
+      dst       : Address.t option;
       gas       : Z.t option;
       gas_price : Z.t option;
       value     : Z.t option;
@@ -60,46 +72,48 @@ struct
   type accepted =
     {
       tx : t;
-      block_hash   : hash256;
+      block_hash   : Hash256.t;
       block_number : int;
-      tx_hash      : hash256;
+      tx_hash      : Hash256.t;
       tx_index     : int
     }
     
   type receipt =
     {
-      block_hash          : hash256;
+      block_hash          : Hash256.t;
       block_number        : int;
-      contract_address    : address option;
+      contract_address    : Address.t option;
       cumulative_gas_used : Z.t;
       gas_used            : Z.t;
-      src                 : address;
-      dst                 : address option;
+      src                 : Address.t;
+      dst                 : Address.t option;
       logs                : log list;
       (* unused:
        * logs_bloom : string;
        * root : string; *)
-      transaction_hash    : hash256;
+      transaction_hash    : Hash256.t;
       transaction_index   : int
     }
+  [@@deriving show]
 
   and log =
     {
-      log_address           : address;
-      log_topics            : hash256 list;
+      log_address           : Address.t;
+      log_topics            : Hash256.t list;
       log_data              : string; (* hex_string *)
       log_block_number      : int;
-      log_transaction_hash  : hash256;
+      log_transaction_hash  : Hash256.t;
       log_transaction_index : int;
-      log_block_hash        : hash256;
+      log_block_hash        : Hash256.t;
       log_index             : int;
       log_removed           : bool
     }
+   [@@deriving show]
 
   let to_json (tx : t) =
     let args =
-      [ ("from", `String (address_to_string tx.src)) ]
-      @ (match tx.dst with Some x -> [("to", `String (address_to_string x))] | _ -> [])
+      [ ("from", `String (Address.show tx.src)) ]
+      @ (match tx.dst with Some x -> [("to", `String (Address.show x))] | _ -> [])
       @ (match tx.gas with Some x -> [("gas", Json.zhex x)] | _ -> [])
       @ (match tx.gas_price with Some x -> [("gasPrice", Json.zhex x)] | _ -> [])
       @ (match tx.value with Some x -> [("value", Json.zhex x)] | _ -> [])
@@ -112,16 +126,16 @@ struct
     let fields = Json.drop_assoc json in
     let table  = Hashtbl.of_list fields in
     let find   = Hashtbl.find table in
-    let src    = find "from"     |> Json.(address_from_string % drop_string) in
-    let dst    = find "to"       |> Json.(address_from_string % drop_string) in
+    let src    = find "from"     |> Json.(Address.from_string % drop_string) in
+    let dst    = find "to"       |> Json.(Address.from_string % drop_string) in
     let gas    = find "gas"      |> Json.drop_bigint_as_string in
     let gasprc = find "gasPrice" |> Json.drop_bigint_as_string in
     let value  = find "value"    |> Json.drop_bigint_as_string in
     let input  = find "input"    |> Json.drop_string in
     let nonce  = find "nonce"    |> Json.drop_int in
-    let blkhsh = find "blockHash"   |> Json.(hash256_from_string % drop_string) in
+    let blkhsh = find "blockHash"   |> Json.(Hash256.from_string % drop_string) in
     let blknmb = find "blockNumber" |> Json.drop_int in
-    let txhash = find "hash"        |> Json.(hash256_from_string % drop_string) in
+    let txhash = find "hash"        |> Json.(Hash256.from_string % drop_string) in
     let txindx = find "transactionIndex" |> Json.drop_int in
     {
       tx =
@@ -147,13 +161,13 @@ struct
     | `Assoc fields ->
       let table = Hashtbl.of_list fields in
       let find  = Hashtbl.find table in
-      let log_address = find "address" |> Json.drop_string |> address_from_string in
-      let log_topics  = find "topics"  |> Json.drop_list |> List.map (hash256_from_string % Json.drop_string) in
+      let log_address = find "address" |> Json.drop_string |> Address.from_string in
+      let log_topics  = find "topics"  |> Json.drop_list |> List.map (Hash256.from_string % Json.drop_string) in
       let log_data    = find "data"    |> Json.drop_string in
       let log_block_number = find "blockNumber" |> Json.drop_int_as_string in
-      let log_transaction_hash = find "transactionHash" |> Json.drop_string |> hash256_from_string in
+      let log_transaction_hash = find "transactionHash" |> Json.drop_string |> Hash256.from_string in
       let log_transaction_index = find "transactionIndex" |> Json.drop_int_as_string in
-      let log_block_hash = find "blockHash" |> Json.drop_string |> hash256_from_string in
+      let log_block_hash = find "blockHash" |> Json.drop_string |> Hash256.from_string in
       let log_index = find "logIndex" |> Json.drop_int_as_string in
       let log_removed = find "removed" |> Json.drop_bool in
       {
@@ -175,21 +189,21 @@ struct
     match j with
     | `Null -> None
     | `Assoc fields ->
-      let block_hash   = assoc "blockHash" fields |> Json.drop_string |> hash256_from_string in
+      let block_hash   = assoc "blockHash" fields |> Json.drop_string |> Hash256.from_string in
       let block_number = assoc "blockNumber" fields |> Json.drop_int_as_string in
       let contract_address =
         match assoc "contractAddress" fields with
-        | `String addr -> Some (address_from_string addr)
+        | `String addr -> Some (Address.from_string addr)
         | `Null        -> None
         | _ ->
           failwith "Types.receipt_from_json: unexpected result"
       in
       let cumulative_gas_used = assoc "cumulativeGasUsed" fields |> Json.drop_bigint_as_string in
       let gas_used = assoc "gasUsed" fields |> Json.drop_bigint_as_string in    
-      let src = assoc "from" fields |> Json.drop_string |> address_from_string in
+      let src = assoc "from" fields |> Json.drop_string |> Address.from_string in
       let dst =
         match assoc "to" fields with
-        | `String addr -> Some (address_from_string addr)
+        | `String addr -> Some (Address.from_string addr)
         | `Null        -> None
         | _ ->
           failwith "Types.receipt_from_json: unexpected result"
@@ -198,7 +212,7 @@ struct
                  |> Json.drop_list
                  |> List.map log_from_json
       in
-      let transaction_hash = assoc "transactionHash" fields |> Json.drop_string |> hash256_from_string in
+      let transaction_hash = assoc "transactionHash" fields |> Json.drop_string |> Hash256.from_string in
       let transaction_index = assoc "transactionIndex" fields |> Json.drop_int_as_string in
       Some {
         block_hash;
@@ -224,15 +238,15 @@ struct
   type t =
     {
       number        : int option;
-      hash          : hash256 option;
-      parent_hash   : hash256;
+      hash          : Hash256.t option;
+      parent_hash   : Hash256.t;
       nonce         : int option;
-      sha3_uncles   : hash256;
+      sha3_uncles   : Hash256.t;
       logs_bloom    : string option;
-      transactions_root : hash256;
-      state_root    : hash256;
-      receipts_root : hash256;
-      miner         : address;
+      transactions_root : Hash256.t;
+      state_root    : Hash256.t;
+      receipts_root : Hash256.t;
+      miner         : Address.t;
       difficulty    : Z.t;
       total_difficulty : Z.t;
       extra_data    : string;
@@ -241,7 +255,7 @@ struct
       gas_used      : Z.t;
       timestamp     : Z.t;
       transactions  : Tx.accepted list;
-      uncles        : hash256 list
+      uncles        : Hash256.t list
     }
 
   let from_json json =
@@ -249,15 +263,15 @@ struct
     let table    = Hashtbl.of_list fields in
     let find     = Hashtbl.find table in
     let number   = find "number"           |> Json.(maybe drop_int_as_string) in
-    let hash     = find "hash"             |> Json.(maybe (hash256_from_string % drop_string)) in
-    let p_hash   = find "parentHash"       |> Json.(hash256_from_string % drop_string) in
+    let hash     = find "hash"             |> Json.(maybe (Hash256.from_string % drop_string)) in
+    let p_hash   = find "parentHash"       |> Json.(Hash256.from_string % drop_string) in
     let nonce    = find "nonce"            |> Json.(maybe drop_int) in
-    let sha3unc  = find "sha3Uncles"       |> Json.(hash256_from_string % drop_string) in
+    let sha3unc  = find "sha3Uncles"       |> Json.(Hash256.from_string % drop_string) in
     let logsblm  = find "logsBloom"        |> Json.(maybe drop_string) in
-    let txs_root = find "transactionsRoot" |> Json.(hash256_from_string % drop_string) in
-    let st_root  = find "stateRoot"        |> Json.(hash256_from_string % drop_string) in
-    let rc_root  = find "receiptsRoot"     |> Json.(hash256_from_string % drop_string) in
-    let miner    = find "miner"            |> Json.(address_from_string % drop_string) in
+    let txs_root = find "transactionsRoot" |> Json.(Hash256.from_string % drop_string) in
+    let st_root  = find "stateRoot"        |> Json.(Hash256.from_string % drop_string) in
+    let rc_root  = find "receiptsRoot"     |> Json.(Hash256.from_string % drop_string) in
+    let miner    = find "miner"            |> Json.(Address.from_string % drop_string) in
     let diff     = find "difficulty"       |> Json.drop_bigint_as_string in
     let totdiff  = find "totalDifficulty"  |> Json.drop_bigint_as_string in
     let ex_data  = find "extraData"        |> Json.drop_string in
@@ -266,7 +280,7 @@ struct
     let gas_used = find "gasUsed"          |> Json.drop_bigint_as_string in
     let tstamp   = find "timestamp"        |> Json.drop_bigint_as_string in
     let txs      = find "transactions"     |> Json.drop_list |> List.map Tx.accepted_from_json in
-    let uncles   = find "uncles"           |> Json.drop_list |> List.map Json.(hash256_from_string % drop_string) in
+    let uncles   = find "uncles"           |> Json.drop_list |> List.map Json.(Hash256.from_string % drop_string) in
     {
       number;
       hash;
@@ -304,15 +318,15 @@ type port_info =
 type protocol_info =
     Eth of {
       difficulty : Z.t;
-      genesis    : hash256 option;
-      head       : hash256;
+      genesis    : Hash256.t option;
+      head       : Hash256.t;
       network    : int option
     }
 
 type node_info =
   {
     enode       : string;
-    id          : hash512;
+    id          : Hash512.t;
     ip          : string;
     listen_addr : string;
     name        : string;
@@ -329,7 +343,7 @@ type network_info =
 type peer =
   {
     caps      : string list;
-    id        : hash512;
+    id        : Hash512.t;
     name      : string;
     network   : network_info;
     protocols : protocol_info;
@@ -340,25 +354,25 @@ type peer_info = peer list
 
 type block_info =
   {
-    block_root     : hash256;
+    block_root     : Hash256.t;
     block_accounts : ba_info list
   }
 
 and ba_info =
   {
-    ba_account   : address;
+    ba_account   : Address.t;
     ba_balance   : Z.t;
     ba_code      : Evm.bytecode;
-    ba_code_hash : hash256;
+    ba_code_hash : Hash256.t;
     ba_nonce     : int;
-    ba_root      : hash256;
+    ba_root      : Hash256.t;
     ba_storage   : ba_storage
   }
 
 (* The type of the data is not clear from the samples I got. It's clearly a hex string but what is
    the max length? *)
 and ba_storage =
-  (hash256 * string) list
+  (Hash256.t * string) list
 
 
 
@@ -366,8 +380,8 @@ and ba_storage =
 (* let transaction_to_json : transaction -> Json.json =
  *   fun t ->
  *     let args =
- *       [ ("from", `String (address_to_string t.src)) ]
- *       @ (match t.dst with Some x -> [("to", `String (address_to_string x))] | _ -> [])
+ *       [ ("from", `String (Address.show t.src)) ]
+ *       @ (match t.dst with Some x -> [("to", `String (Address.show x))] | _ -> [])
  *       @ (match t.gas with Some x -> [("gas", zhex x)] | _ -> [])
  *       @ (match t.gas_price with Some x -> [("gasPrice", zhex x)] | _ -> [])
  *       @ (match t.value with Some x -> [("value", zhex x)] | _ -> [])
@@ -398,12 +412,12 @@ let protocol_info_from_json : Json.json -> protocol_info option =
       let genesis =
         try Some (assoc "genesis" fields
                   |> Json.drop_string
-                  |> hash256_from_string)
+                  |> Hash256.from_string)
         with _ -> None
       in
       let head = assoc "head" fields
                  |> Json.drop_string
-                 |> hash256_from_string
+                 |> Hash256.from_string
       in
       let network =
         try Some (assoc "network" fields |> Json.drop_int)
@@ -421,7 +435,7 @@ let node_info_from_json : Json.json -> node_info option =
       let id = assoc "id" fields
                |> Json.drop_string
                |> (fun x -> "0x"^x) (* HACK: for some reason geth does not prefix the hash with 0x. *)
-               |> hash512_from_string
+               |> Hash512.from_string
       in
       let ip = assoc "ip" fields |> Json.drop_string in
       let listen_addr = assoc "listenAddr" fields |> Json.drop_string in
@@ -460,7 +474,7 @@ let peer_from_json : Json.json -> peer option =
       let id   = assoc "id" fields
                  |> Json.drop_string
                  |> (fun x -> "0x"^x) (* HACK: for some reason geth does not prefix the hash with 0x. *)                      
-                 |> hash512_from_string
+                 |> Hash512.from_string
       in
       let name = assoc "name" fields |> Json.drop_string in
       let network =
@@ -495,12 +509,12 @@ let block_from_json : Json.json -> block_info =
       assoc "root" fields
       |> Json.drop_string
       |> _0x
-      |> hash256_from_string
+      |> Hash256.from_string
     in
     let accounts = assoc "accounts" fields |> Json.drop_assoc in
     let accounts =
       ListLabels.map accounts ~f:(fun (address, json) ->
-          let address = address_from_string address in
+          let address = Address.from_string address in
           let fields = Json.drop_assoc json in
           let balance = assoc "balance" fields |> Json.drop_bigint_as_string in
           let code =
@@ -511,16 +525,16 @@ let block_from_json : Json.json -> block_info =
             |> Evm.parse_hexstring
           in
           let code_hash =
-            assoc "codeHash" fields |> Json.drop_string |> _0x |> hash256_from_string
+            assoc "codeHash" fields |> Json.drop_string |> _0x |> Hash256.from_string
           in
           let nonce = assoc "nonce" fields |> Json.drop_int in
           let root  =
-            assoc "root" fields |> Json.drop_string |> _0x |> hash256_from_string in
+            assoc "root" fields |> Json.drop_string |> _0x |> Hash256.from_string in
           let storage =
             assoc "storage" fields
             |> Json.drop_assoc
             |> List.map (fun (key, data) ->
-                (hash256_from_string (_0x key), Json.drop_string data)
+                (Hash256.from_string (_0x key), Json.drop_string data)
               )
           in
           {
