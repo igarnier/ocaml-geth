@@ -10,6 +10,7 @@ let switch_debug () =
   debug_flag := not !debug_flag
       
 let print_debug s =
+  ignore s;
   if !debug_flag then
     ()
     (* print_endline s *)
@@ -161,7 +162,9 @@ struct
   let call ~uri ~transaction ~(at_time : time) =
     rpc_call uri "eth_call" (`List [ Tx.to_json transaction; time_to_json at_time ]) |> Get.string
 
-  (* estimateGas *)
+  let estimate_gas ~uri ~transaction ~(at_time : time) =
+    rpc_call uri "eth_estimateGas" (`List [ Tx.to_json transaction; time_to_json at_time ]) |> Get.int
+
   (* getBlockByHash/byNumber, etc *)
   (* getTransactionReceipt *)
   let get_transaction_receipt ~uri ~transaction_hash =
