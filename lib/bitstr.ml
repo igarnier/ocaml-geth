@@ -7,7 +7,7 @@ module Hex =
 struct
 
   type t = string
-  [@@deriving eq, show]
+  [@@deriving eq]
 
   let char_is_hex = function
     | '0' .. '9'
@@ -56,7 +56,6 @@ struct
         "0x"^hexstr
       else 
         "0x0"^hexstr
-
 
   let of_int i =
     (* use two's complement *)
@@ -108,6 +107,11 @@ struct
 
   let length (x : t) =
     Bytes.int ((String.length x - 2) / 2)
+
+  let show = of_string
+
+  let pp fmt s =
+    Format.pp_print_string fmt (of_string s)
 
 end
 

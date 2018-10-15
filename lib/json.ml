@@ -101,14 +101,15 @@ module Get =
 struct
 
   let result (json : Yojson.Safe.json) =
-    let json = drop_assoc json in
-    try Ok (List.assoc "result" json)
+    let json' = drop_assoc json in
+    try Ok (List.assoc "result" json')
     with Not_found ->
       (try
-         let errmsg = List.assoc "error" json |> parse_error in
+         let errmsg = List.assoc "error" json' |> parse_error in
          Bad errmsg
        with Not_found ->
-         failwith "Json.result: could not parse result")
+         let s = Yojson.Safe.to_string json in
+         failwith ("Json.Get.result: could not parse result "^s))
 
   let bool json =
     json |> result |> (Result.map drop_bool)
@@ -140,17 +141,18 @@ module GetExn =
 struct
 
   let result (json : Yojson.Safe.json) =
-    let json = drop_assoc json in
+    let json' = drop_assoc json in
     try
-      List.assoc "result" json
+      List.assoc "result" json'
     with Not_found ->
       (let errmsg =
          try
-           List.assoc "error" json |> parse_error
+           List.assoc "error" json' |> parse_error
          with Not_found ->
            failwith "Json.result: could not parse result"
        in
-       raise (JsonError errmsg))
+       let s = Yojson.Safe.to_string json in
+       failwith ("Jgon.GetExn.result: "^errmsg.msg^"/"^s))
 
   let bool json =
     json |> result |> drop_bool
