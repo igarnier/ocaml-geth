@@ -729,7 +729,7 @@ struct
   let deploy_rpc
       ~(uri:string)
       ~(account:Types.Address.t)
-      ~(gas:Z.t)
+      ~(gas:[`Manual of Z.t | `Auto])
       ~(contract:solidity_output)
       ~(arguments:ABI.value list)
       ~(value:Z.t option) =
@@ -754,7 +754,11 @@ struct
       Bitstr.(uncompress (Bit.concat [ctx.bin; encoded]))
     in
     let deploy data =
-      Rpc.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ~gas ()
+      match gas with
+      | `Manual gas ->
+        Rpc.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ~gas ()
+      | `Auto ->
+        Rpc.Eth.send_contract_and_get_receipt_auto ~uri ~src:account ~data ()
     in
     let rec loop ctxs =
       match ctxs with

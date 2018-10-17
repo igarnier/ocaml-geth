@@ -163,7 +163,7 @@ struct
     rpc_call uri "eth_call" (`List [ Tx.to_json transaction; time_to_json at_time ]) |> Get.string
 
   let estimate_gas ~uri ~transaction ~(at_time : time) =
-    rpc_call uri "eth_estimateGas" (`List [ Tx.to_json transaction; time_to_json at_time ]) |> Get.int
+    rpc_call uri "eth_estimateGas" (`List [ Tx.to_json transaction; time_to_json at_time ]) |> Get.bigint
 
   (* getBlockByHash/byNumber, etc *)
   (* getTransactionReceipt *)
@@ -186,19 +186,21 @@ struct
     in
     loop ()
 
-  let send_contract_and_get_receipt ~uri ~src ~data ~gas () =
+  let send_contract_and_get_receipt_auto ~uri ~src ~data ?value () =
     let open Tx in
     let tx =
       {
         src;
         dst   = None;
-        gas   = Some gas;
+        gas   = None;
         gas_price = None;
-        value = None;
+        value;
         data  = Bitstr.Hex.as_string data;
         nonce = None
       }
     in
+    let gas = estimate_gas ~uri ~transaction:tx ~at_time:`latest in
+    let tx  = { tx with gas = Some gas } in
     send_transaction_and_get_receipt ~uri ~transaction:tx
 
   let send_contract_and_get_receipt ~uri ~src ~data ~gas ?value () =
@@ -236,7 +238,24 @@ struct
     in
     loop ()
 
-    let send_contract_and_get_receipt ~uri ~src ~data ~gas () =
+    let send_contract_and_get_receipt_auto ~uri ~src ~data ?value () =
+      let open Tx in
+      let tx =
+        {
+          src;
+          dst   = None;
+          gas   = None;
+          gas_price = None;
+          value;
+          data  = Bitstr.Hex.as_string data;
+          nonce = None
+        }
+      in
+      let gas = Eth.estimate_gas ~uri ~transaction:tx ~at_time:`latest in
+      let tx  = { tx with gas = Some gas } in
+      send_transaction_and_get_receipt ~uri ~transaction:tx
+
+    let send_contract_and_get_receipt ~uri ~src ~data ~gas ?value () =
     let open Tx in
     let tx =
       {
@@ -244,7 +263,7 @@ struct
         dst   = None;
         gas   = Some gas;
         gas_price = None;
-        value = None;
+        value;
         data  = Bitstr.Hex.as_string data;
         nonce = None
       }

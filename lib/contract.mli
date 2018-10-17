@@ -130,7 +130,7 @@ sig
   val deploy_rpc :
     uri:string ->
     account:Types.Address.t ->
-    gas:Z.t ->
+    gas:[`Manual of Z.t | `Auto] ->
     contract:solidity_output ->
     arguments:ABI.value list ->
     value:Z.t option ->
