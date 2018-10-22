@@ -313,12 +313,7 @@ struct
     rpc_call uri "miner_start" (`List [args]) |> Get.null
 
   let stop ~uri =
-    let rpc_result = rpc_call uri "miner_stop" `Null in
-    try Get.bool rpc_result with
-    | _ ->
-      let json = Ocaml_geth.Json.to_string rpc_result in
-      let msg  = Printf.sprintf "in Rpc.Miner.stop: expected boolean, got %s" json in
-      failwith msg
+    ignore (rpc_call uri "miner_stop" `Null)
 
   let set_ether_base ~uri ~address =
     let args = `List [`String (Address.show address)] in

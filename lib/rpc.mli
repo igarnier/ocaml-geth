@@ -63,7 +63,7 @@ sig
 
   val set_gas_price : uri:string -> gas_price:Z.t -> bool
   val start : uri:string -> thread_count:int -> unit
-  val stop : uri:string -> bool
+  val stop : uri:string -> unit
   val set_ether_base : uri:string -> address:Address.t -> bool
   
 end
