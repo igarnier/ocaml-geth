@@ -199,7 +199,13 @@ struct
         nonce = None
       }
     in
-    let gas = estimate_gas ~uri ~transaction:tx ~at_time:`latest in
+    let gas = 
+      try estimate_gas ~uri ~transaction:tx ~at_time:`latest 
+      with
+      | exn->
+        let msg = "send_contract_and_get_receipt_auto: error in estimate_gas" in
+        failwith @@ msg ^ "/" ^ (Printexc.to_string exn)
+    in
     let tx  = { tx with gas = Some gas } in
     send_transaction_and_get_receipt ~uri ~transaction:tx
 
