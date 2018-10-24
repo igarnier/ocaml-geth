@@ -162,8 +162,12 @@ struct
   let call ~uri ~transaction ~(at_time : time) =
     rpc_call uri "eth_call" (`List [ Tx.to_json transaction; time_to_json at_time ]) |> Get.string
 
-  let estimate_gas ~uri ~transaction ~(at_time : time) =
-    rpc_call uri "eth_estimateGas" (`List [ Tx.to_json transaction; time_to_json at_time ]) |> Get.bigint
+  let estimate_gas ~uri ~transaction =
+    try rpc_call uri "eth_estimateGas" (`List [Tx.to_json transaction]) |> Get.bigint_as_string
+    with
+    | exn->
+      let msg = "estimate_gas: error" in
+      failwith @@ msg ^ "/" ^ (Printexc.to_string exn)
 
   (* getBlockByHash/byNumber, etc *)
   (* getTransactionReceipt *)
@@ -199,13 +203,7 @@ struct
         nonce = None
       }
     in
-    let gas = 
-      try estimate_gas ~uri ~transaction:tx ~at_time:`latest 
-      with
-      | exn->
-        let msg = "send_contract_and_get_receipt_auto: error in estimate_gas" in
-        failwith @@ msg ^ "/" ^ (Printexc.to_string exn)
-    in
+    let gas = estimate_gas ~uri ~transaction:tx in
     let tx  = { tx with gas = Some gas } in
     send_transaction_and_get_receipt ~uri ~transaction:tx
 
@@ -257,7 +255,7 @@ struct
           nonce = None
         }
       in
-      let gas = Eth.estimate_gas ~uri ~transaction:tx ~at_time:`latest in
+      let gas = Eth.estimate_gas ~uri ~transaction:tx in
       let tx  = { tx with gas = Some gas } in
       send_transaction_and_get_receipt ~uri ~transaction:tx
 

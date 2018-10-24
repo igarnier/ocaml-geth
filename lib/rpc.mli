@@ -34,7 +34,7 @@ sig
   val send_transaction : uri:string -> transaction:Tx.t -> Hash256.t
   val send_raw_transaction : uri:string -> data:string -> Hash256.t
   val call : uri:string -> transaction:Tx.t -> at_time:time -> string
-  val estimate_gas : uri:string -> transaction:Tx.t -> at_time:time -> Z.t
+  val estimate_gas : uri:string -> transaction:Tx.t -> Z.t
   val get_transaction_receipt : uri:string -> transaction_hash:Hash256.t -> Tx.receipt option
   val send_transaction_and_get_receipt : uri:string -> transaction:Tx.t -> Tx.receipt
   val send_contract_and_get_receipt_auto : uri:string -> src:Address.t -> data:Bitstr.Hex.t -> ?value:Z.t -> unit -> Tx.receipt
