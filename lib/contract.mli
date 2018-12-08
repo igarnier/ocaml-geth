@@ -130,43 +130,53 @@ sig
   val deploy_rpc :
     uri:string ->
     account:Types.Address.t ->
-    gas:[`Manual of Z.t | `Auto] ->
     contract:solidity_output ->
     arguments:ABI.value list ->
-    value:Z.t option ->
-    Types.Tx.receipt
+    ?gas:Z.t ->
+    ?value:Z.t ->
+    unit ->
+    Types.Tx.receipt Lwt.t
 
   val call_method_tx :
+    uri:string ->
     abi:ABI.method_abi ->
     arguments:ABI.value list ->
     src:Types.Address.t ->
-    ctx:Types.Address.t -> gas:Z.t -> value:Z.t option -> Types.Tx.t
+    ctx:Types.Address.t -> 
+    ?gas:Z.t -> 
+    ?value:Z.t -> 
+    unit ->
+    Types.Tx.t Lwt.t
 
   val call_void_method_tx :
     mname:string ->
     src:Types.Address.t ->
-    ctx:Types.Address.t -> gas:Z.t -> Types.Tx.t
+    ctx:Types.Address.t -> 
+    ?gas:Z.t -> 
+    unit ->
+    Types.Tx.t Lwt.t
 
   val execute_method :
     uri:string ->
     abi:ABI.method_abi ->
     arguments:ABI.value list ->
     src:Types.Address.t ->
-    ctx:Types.Address.t -> gas:Z.t -> value:Z.t option -> Types.Tx.receipt
-
-  val execute_method_lwt :
-    uri:string ->
-    abi:ABI.method_abi ->
-    arguments:ABI.value list ->
-    src:Types.Address.t ->
-    ctx:Types.Address.t -> gas:Z.t -> value:Z.t option -> Types.Tx.receipt Lwt.t
+    ctx:Types.Address.t -> 
+    ?gas:Z.t -> 
+    ?value:Z.t -> 
+    unit -> 
+    Types.Tx.receipt Lwt.t
   
   val call_method :
     uri:string ->
     abi:ABI.method_abi ->
     arguments:ABI.value list ->
     src:Types.Address.t ->
-    ctx:Types.Address.t -> gas:Z.t -> value:Z.t option -> string
+    ctx:Types.Address.t -> 
+    ?gas:Z.t -> 
+    ?value:Z.t -> 
+    unit ->
+    string Lwt.t
  
 
 end  
