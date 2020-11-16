@@ -1,6 +1,6 @@
 (executable
- (modes byte exe)
  (name monitor)
+ (public_name geth-monitor)
+ (package geth-lwt)
  (modules monitor)
- (ocamlopt_flags -O3)
- (libraries batteries ocaml-geth))
+ (libraries geth geth-lwt))

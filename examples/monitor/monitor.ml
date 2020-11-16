@@ -1,5 +1,6 @@
-open Batteries
-open Ocaml_geth
+open Lwt.Infix
+open Geth
+open Geth_lwt
 open Types
 open Rpc
 
@@ -9,9 +10,8 @@ type block_predicate = Block.t -> bool
 type state = {block_number: int; blocks: Block.t list}
 
 let poll_new_block uri state =
-  match
-    Eth.get_block_by_number ~uri ~at_time:(`block (state.block_number + 1))
-  with
+  Eth.get_block_by_number ~uri ~at_time:(`block (state.block_number + 1))
+  >|= function
   | None -> None
   | Some block -> (
     match block.Block.number with
@@ -32,24 +32,26 @@ let process_action action_table new_block =
   loop action_table
 
 let rec iter_blocks period uri state f =
-  match poll_new_block uri state with
-  | None ->
-      Unix.sleepf period ;
-      iter_blocks period uri state f
-  | Some ({blocks= new_block :: _} as new_state) ->
-      f new_block ;
-      iter_blocks period uri new_state f
-  | _ -> failwith "poll_loop: impossible state reached!?"
+  poll_new_block uri state
+  >>= function
+  | None -> Lwt_unix.sleep period >>= fun () -> iter_blocks period uri state f
+  | Some ({blocks= new_block :: _; _} as new_state) ->
+      f new_block >>= fun () -> iter_blocks period uri new_state f
+  | _ -> Lwt.fail_with "poll_loop: impossible state reached!?"
 
 let default_action block =
   Printf.printf "block #%s, #tx %d, tstamp %s\n%!"
-    Option.(map_default string_of_int "pending" block.Block.number)
+    (Option.fold ~none:"pending" ~some:string_of_int block.Block.number)
     (List.length block.Block.transactions)
-    (Z.to_string block.Block.timestamp)
+    (Z.to_string block.Block.timestamp) ;
+  Lwt.return_unit
 
-let _ =
+let main () =
   let uri = "http://localhost:8545" in
   Rpc.switch_debug () ;
-  let blocknum = Eth.block_number ~uri in
-  let state = {block_number= blocknum; blocks= []} in
+  Eth.block_number ~uri
+  >>= fun block_number ->
+  let state = {block_number; blocks= []} in
   iter_blocks 0.5 uri state default_action
+
+let () = Lwt_main.run (main ())
