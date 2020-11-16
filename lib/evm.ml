@@ -1,5 +1,3 @@
-open Batteries
-
 (* A literal is an hexadecimal string, without 0x prefix, of length at most 32 bytes and at least 1 byte (2 hex digits) *)
 type literal = string
 
@@ -527,10 +525,10 @@ module Ops = struct
     if 0x60 <= c && c <= 0x7f then c - 0x60 + 1
     else failwith "instruction not a PUSHn"
 
-  let dupdepth x =
-    let c = opcode x in
-    if 0x80 <= c && c <= 0x8f then c - 0x80 + 1
-    else failwith "instruction not a PUSHn"
+  (* let dupdepth x =
+   *   let c = opcode x in
+   *   if 0x80 <= c && c <= 0x8f then c - 0x80 + 1
+   *   else failwith "instruction not a PUSHn" *)
 end
 
 let literal_of_int i =
@@ -606,7 +604,7 @@ let deploy (program : bytecode) =
   deploy_code @ program
 
 let parse_hexstring (str : Bitstr.Hex.t) =
-  let compressed = Bitstr.(Bitstr.Bit.as_string (Bitstr.compress str)) in
+  let compressed = Bitstr.(Bit.as_string (compress str)) in
   let rec loop bc acc =
     match bc with
     | [] -> List.rev acc
@@ -614,15 +612,15 @@ let parse_hexstring (str : Bitstr.Hex.t) =
         (* push *)
         let code = codeop code in
         let depth = Ops.pushdepth code in
-        let taken, rest = List.takedrop depth tl in
-        let lit = String.of_list taken in
+        let taken, rest = CCList.take_drop depth tl in
+        let lit = String.of_seq (List.to_seq taken) in
         let (`Hex lit) = Hex.of_string lit in
         loop rest (Literal lit :: Instr code :: acc)
     | code :: tail ->
         let result =
           try Instr (codeop code) with WrongOpcode _ -> MissingOpcode code in
         loop tail (result :: acc) in
-  loop (String.explode compressed) []
+  loop (List.of_seq (String.to_seq compressed)) []
 
 (* let deploy (program : bytecode) =
  *   let prog_len = length program in
@@ -635,10 +633,10 @@ let parse_hexstring (str : Bitstr.Hex.t) =
 
 (* PUSH1 0 CALLDATALOAD SLOAD NOT PUSH1 9 JUMPI STOP JUMPDEST PUSH1 32 CALLDATALOAD PUSH1 0 CALLDATALOAD SSTORE *)
 
-let example =
-  [ Instr PUSH1; Literal "00"; Instr CALLDATALOAD; Instr SLOAD; Instr NOT;
-    Instr PUSH1; Literal "09"; Instr JUMPI; Instr STOP; Instr JUMPDEST;
-    Instr PUSH1; Literal "20"; Instr CALLDATALOAD; Instr PUSH1; Literal "00";
-    Instr CALLDATALOAD; Instr SSTORE ]
-
-let bytecode = dump example
+(* let example =
+ *   [ Instr PUSH1; Literal "00"; Instr CALLDATALOAD; Instr SLOAD; Instr NOT;
+ *     Instr PUSH1; Literal "09"; Instr JUMPI; Instr STOP; Instr JUMPDEST;
+ *     Instr PUSH1; Literal "20"; Instr CALLDATALOAD; Instr PUSH1; Literal "00";
+ *     Instr CALLDATALOAD; Instr SSTORE ]
+ * 
+ * let bytecode = dump example *)

@@ -1,4 +1,5 @@
-open Batteries
+open CCFun
+open Yojson.Safe
 
 module Address = struct
   type t = Bitstr.Hex.t [@@deriving eq, show]
@@ -111,7 +112,7 @@ module Tx = struct
 
   let accepted_from_json json =
     let fields = Json.drop_assoc json in
-    let table = Hashtbl.of_list fields in
+    let table = CCHashtbl.of_list fields in
     let find = Hashtbl.find table in
     let src = find "from" |> Json.(Address.from_string % drop_string) in
     let dst = find "to" |> Json.(Address.from_string % drop_string) in
@@ -140,7 +141,7 @@ module Tx = struct
   let log_from_json json =
     match json with
     | `Assoc fields ->
-        let table = Hashtbl.of_list fields in
+        let table = CCHashtbl.of_list fields in
         let find = Hashtbl.find table in
         let log_address =
           find "address" |> Json.drop_string |> Address.from_string in
@@ -242,7 +243,7 @@ module Block = struct
 
   let from_json json =
     let fields = Json.drop_assoc json in
-    let table = Hashtbl.of_list fields in
+    let table = CCHashtbl.of_list fields in
     let find = Hashtbl.find table in
     let number = find "number" |> Json.(maybe drop_int_as_string) in
     let hash = find "hash" |> Json.(maybe (Hash256.from_string % drop_string)) in
@@ -335,7 +336,7 @@ and ba_info =
    the max length? *)
 and ba_storage = (Hash256.t * string) list
 
-(* let transaction_to_json : transaction -> Json.json =
+(* let transaction_to_json : transaction -> Yojson.Safe.t =
  *   fun t ->
  *     let args =
  *       [ ("from", `String (Address.show t.src)) ]
@@ -348,7 +349,7 @@ and ba_storage = (Hash256.t * string) list
  *     in
  *     (`Assoc args) *)
 
-let port_info_from_json : Json.json -> port_info option =
+let port_info_from_json : Yojson.Safe.t -> port_info option =
  fun j ->
   match j with
   | `Assoc fields ->
@@ -357,7 +358,7 @@ let port_info_from_json : Json.json -> port_info option =
       Some {discovery; listener}
   | _ -> None
 
-let protocol_info_from_json : Json.json -> protocol_info option =
+let protocol_info_from_json : Yojson.Safe.t -> protocol_info option =
  fun j ->
   let proto = Json.drop_assoc j |> assoc "eth" in
   match proto with
@@ -376,7 +377,7 @@ let protocol_info_from_json : Json.json -> protocol_info option =
       Some (Eth {difficulty; genesis; head; network})
   | _ -> None
 
-let node_info_from_json : Json.json -> node_info option =
+let node_info_from_json : Yojson.Safe.t -> node_info option =
  fun j ->
   match j with
   | `Assoc fields ->
@@ -400,7 +401,7 @@ let node_info_from_json : Json.json -> node_info option =
       Some {enode; id; ip; listen_addr; name; ports; protocols}
   | _ -> None
 
-let network_info_from_json : Json.json -> network_info option =
+let network_info_from_json : Yojson.Safe.t -> network_info option =
  fun j ->
   match j with
   | `Assoc fields ->
@@ -409,7 +410,7 @@ let network_info_from_json : Json.json -> network_info option =
       Some {local_address; remote_address}
   | _ -> None
 
-let peer_from_json : Json.json -> peer option =
+let peer_from_json : Yojson.Safe.t -> peer option =
  fun j ->
   match j with
   | `Assoc fields ->
@@ -431,7 +432,7 @@ let peer_from_json : Json.json -> peer option =
       Some {caps; id; name; network; protocols}
   | _ -> None
 
-let peer_info_from_json : Json.json -> peer_info =
+let peer_info_from_json : Yojson.Safe.t -> peer_info =
  fun j ->
   let elts = Json.drop_list j in
   List.map
@@ -443,7 +444,7 @@ let peer_info_from_json : Json.json -> peer_info =
 
 let _0x s = "0x" ^ s
 
-let block_from_json : Json.json -> block_info =
+let block_from_json : Yojson.Safe.t -> block_info =
  fun j ->
   let fields = Json.drop_assoc j in
   let root =

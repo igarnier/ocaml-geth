@@ -89,9 +89,9 @@ module Tx : sig
       log_index: int;
       log_removed: bool }
 
-  val accepted_from_json : Json.json -> accepted
-  val to_json : t -> Json.json
-  val receipt_from_json : Json.json -> receipt option
+  val accepted_from_json : Yojson.Safe.t -> accepted
+  val to_json : t -> Yojson.Safe.t
+  val receipt_from_json : Yojson.Safe.t -> receipt option
   val show_receipt : receipt -> string
 end
 
@@ -139,7 +139,7 @@ module Block : sig
       transactions: Tx.accepted list;
       uncles: Hash256.t list }
 
-  val from_json : Json.json -> t
+  val from_json : Yojson.Safe.t -> t
 end
 
 type port_info = {discovery: int; listener: int}
@@ -215,8 +215,8 @@ and ba_storage = (Hash256.t * string) list
  *         transactionIndex: null,
  *   } *)
 
-(* val transaction_to_json : transaction -> Json.json *)
-(* val receipt_from_json : Json.json -> transaction_receipt option *)
-val node_info_from_json : Json.json -> node_info option
-val peer_info_from_json : Json.json -> peer_info
-val block_from_json : Json.json -> block_info
+(* val transaction_to_json : transaction -> Yojson.Safe.t *)
+(* val receipt_from_json : Yojson.Safe.t -> transaction_receipt option *)
+val node_info_from_json : Yojson.Safe.t -> node_info option
+val peer_info_from_json : Yojson.Safe.t -> peer_info
+val block_from_json : Yojson.Safe.t -> block_info

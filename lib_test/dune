@@ -1,15 +1,3 @@
-(executables
- (modes byte exe)
- (names test)
- (libraries batteries mlparity ssh-client))
-
-; (rule
-;  ((targets (mondrian.pdf))
-;   (action (with-stdout-to ${@} (run ${test:mondrian.exe})))))
-
-(rule
- (alias runtest)
- (deps
-  (:< test.exe))
- (action
-  (run %{<})))
+(test
+ (name test)
+ (libraries geth hex))

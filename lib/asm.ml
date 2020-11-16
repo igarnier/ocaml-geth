@@ -1,5 +1,3 @@
-open Batteries
-
 type t = block list
 
 and block = {name: string option; instrs: instr list}

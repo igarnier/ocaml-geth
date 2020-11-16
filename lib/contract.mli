@@ -25,6 +25,10 @@ module SolidityTypes : sig
   val string_t : t
   val bytes_t : t
   val address_t : t
+
+  (**/*)
+
+  val print : t -> string
 end
 
 module ABI : sig
@@ -72,7 +76,6 @@ module ABI : sig
   val uint256_val : int64 -> value
   val string_val : string -> value
   val bytes_val : string -> value
-  val bytes_val : string -> value
   val bool_val : bool -> value
   val address_val : Types.Address.t -> value
   val tuple_val : value list -> value
@@ -95,7 +98,11 @@ module ABI : sig
     val decode_events : abi list -> Types.Tx.receipt -> event list
   end
 
-  val from_json : Json.json -> abi list
+  val from_json : Yojson.Safe.t -> abi list
+
+  (**/*)
+
+  val keccak_4_bytes : string -> Bitstr.Bit.t
 end
 
 module Compile : sig
@@ -107,55 +114,4 @@ module Compile : sig
   val to_json : filename:string -> solidity_output
   val get_constructor : solidity_contract -> ABI.constructor_abi
   val get_method : solidity_contract -> string -> ABI.method_abi option
-
-  val deploy_rpc :
-    uri:string ->
-    account:Types.Address.t ->
-    contract:solidity_output ->
-    arguments:ABI.value list ->
-    ?gas:Z.t ->
-    ?value:Z.t ->
-    unit ->
-    Types.Tx.receipt Lwt.t
-
-  val call_method_tx :
-    uri:string ->
-    abi:ABI.method_abi ->
-    arguments:ABI.value list ->
-    src:Types.Address.t ->
-    ctx:Types.Address.t ->
-    ?gas:Z.t ->
-    ?value:Z.t ->
-    unit ->
-    Types.Tx.t Lwt.t
-
-  val call_void_method_tx :
-    mname:string ->
-    src:Types.Address.t ->
-    ctx:Types.Address.t ->
-    ?gas:Z.t ->
-    unit ->
-    Types.Tx.t Lwt.t
-
-  val execute_method :
-    uri:string ->
-    abi:ABI.method_abi ->
-    arguments:ABI.value list ->
-    src:Types.Address.t ->
-    ctx:Types.Address.t ->
-    ?gas:Z.t ->
-    ?value:Z.t ->
-    unit ->
-    Types.Tx.receipt Lwt.t
-
-  val call_method :
-    uri:string ->
-    abi:ABI.method_abi ->
-    arguments:ABI.value list ->
-    src:Types.Address.t ->
-    ctx:Types.Address.t ->
-    ?gas:Z.t ->
-    ?value:Z.t ->
-    unit ->
-    string Lwt.t
 end

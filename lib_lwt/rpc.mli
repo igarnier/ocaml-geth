@@ -1,3 +1,4 @@
+open Geth
 open Types
 
 val switch_debug : unit -> unit

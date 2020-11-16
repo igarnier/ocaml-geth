@@ -1,4 +1,3 @@
-open Batteries
 open Ssh_client
 
 (* A basic shell on top of SSH. *)

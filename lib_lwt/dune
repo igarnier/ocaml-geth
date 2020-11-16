@@ -1,0 +1,10 @@
+(library
+ (name geth_lwt)
+ (public_name geth-lwt)
+ (preprocess (pps lwt_ppx))
+ (libraries
+   geth
+   lwt
+   lwt_ppx
+   lwt_log
+   cohttp-lwt-unix))

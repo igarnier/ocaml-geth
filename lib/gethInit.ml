@@ -1,5 +1,5 @@
+open CCFun
 open Types
-open Batteries
 
 module Genesis = struct
   (** See the following URL for more detail.
@@ -71,7 +71,7 @@ module Genesis = struct
 
   let hex_of_int i = Printf.sprintf "0x%x" i
 
-  let to_json : t -> Yojson.Basic.json =
+  let to_json : t -> Yojson.Basic.t =
    fun block ->
     let config =
       ( "config",
@@ -220,11 +220,11 @@ let log_exec_code ?read_stderr ?read_timeout shell command =
    to a local file, then sent via scp to the remote host. *)
 let write_genesis genesis_block root_dir mode session =
   let local_genesis = Filename.temp_file "genesis" ".json" in
-  File.with_file_out ~mode:[`create; `text] ~perm:(File.unix_perm mode)
-    local_genesis (fun fd ->
+  CCIO.with_out ~flags:[Open_creat; Open_text] ~mode:0o644 local_genesis
+    (fun oc ->
       let json_str =
         genesis_block |> Genesis.to_json |> Yojson.Basic.to_string in
-      output_string fd json_str) ;
+      output_string oc json_str) ;
   Ssh_client.Easy.scp ~session ~src_path:local_genesis
     ~dst_path:(root_dir // "genesis.json")
     ~mode
@@ -250,7 +250,7 @@ let parse_enode raw_enode =
     with Not_found -> String.length enode_addr in
   let enode_addr = Str.string_before enode_addr enode_end in
   (* Remove trailing "\n" if any *)
-  String.strip enode_addr
+  Option.value ~default:enode_addr (CCString.chop_suffix ~suf:"\n" enode_addr)
 
 (* Returns the process that runs on [port] on the remote host, if any.
    This should be MacOS-ok. *)
@@ -259,7 +259,7 @@ let port_is_free shell port =
     Printf.sprintf "lsof -n -i:%d | cut -d \" \" -f1 | tail -n 1" port in
   let command = Shell.of_string command in
   let result = Shell.execute ~read_timeout:300 shell command in
-  String.is_empty result
+  CCString.is_empty result
 
 let add_peers (geth_config, target) peers =
   let add_peer enode =

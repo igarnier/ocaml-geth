@@ -1,4 +1,5 @@
-open Batteries
+open CCFun
+open Geth
 open Types
 
 let debug_flag = ref false
@@ -8,9 +9,8 @@ let print_debug s =
   if !debug_flag then Lwt_log.debug_f "Ocaml_geth.Rpc: %s" s
   else Lwt.return_unit
 
-let rpc_call uri method_name (params : Json.json) =
-  let open Yojson.Safe in
-  let json : Json.json =
+let rpc_call uri method_name (params : Yojson.Safe.t) =
+  let json : Yojson.Safe.t =
     `Assoc
       [ ("jsonrpc", `String "2.0"); ("method", `String method_name);
         ("params", params); ("id", `Int 0) (* TODO: this sould be a UID *) ]
@@ -19,12 +19,12 @@ let rpc_call uri method_name (params : Json.json) =
   let headers = Cohttp.Header.of_list [("Content-type", "application/json")] in
   let body = Cohttp_lwt.Body.of_string data in
   print_debug (Printf.sprintf "Rpc.call: raw request =\n%s\n" data) ;%lwt
-  let%lwt resp, body =
+  let%lwt _resp, body =
     Cohttp_lwt_unix.Client.post (Uri.of_string uri) ~headers ~body in
   match body with
   | `Empty -> Lwt.fail_with "Ocaml_geth.Rpc.rpc_call: error, empty reply"
-  | `Strings ls -> Lwt.fail_with "Ocaml_geth.Rpc.rpc_call: error, string list"
-  | `String s -> Lwt.fail_with "Ocaml_geth.Rpc.rpc_call: error, string"
+  | `Strings _ls -> Lwt.fail_with "Ocaml_geth.Rpc.rpc_call: error, string list"
+  | `String _s -> Lwt.fail_with "Ocaml_geth.Rpc.rpc_call: error, string"
   | `Stream stream -> (
       let%lwt ls = Lwt_stream.to_list stream in
       match ls with
@@ -119,11 +119,11 @@ let rpc_call uri method_name (params : Json.json) =
 
 module Get = Json.GetExn
 
-module Net = struct
-  let version ~uri = rpc_call uri "net_version" `Null
-  let listening ~uri = rpc_call uri "net_listening" `Null
-  let peer_count ~uri = rpc_call uri "net_peerCount" `Null
-end
+(* module Net = struct
+ *   let version ~uri = rpc_call uri "net_version" `Null
+ *   let listening ~uri = rpc_call uri "net_listening" `Null
+ *   let peer_count ~uri = rpc_call uri "net_peerCount" `Null
+ * end *)
 
 let ( |>> ) promise pure = Lwt.bind promise (fun x -> Lwt.return (pure x))
 
