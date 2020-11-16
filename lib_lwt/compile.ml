@@ -1,6 +1,92 @@
 open Geth
 open Contract
-open Compile
+
+type solidity_output = {version: string; contracts: solidity_contract list}
+
+and solidity_contract =
+  {contract_name: string; bin: Bitstr.Bit.t; abi: ABI.abi list}
+
+let exec_and_get_stdout command args =
+  let output, input = Unix.pipe () in
+  let this_pid = Unix.fork () in
+  if this_pid < 0 then failwith "exec_and_get_stdout: error while forking"
+  else if this_pid = 0 then (
+    Unix.dup2 input Unix.stdout ;
+    Unix.close output ;
+    Unix.close input ;
+    Unix.execvp command args )
+  else (
+    Unix.close input ;
+    let _, status = Unix.wait () in
+    match status with
+    | WEXITED 0 ->
+        let res = CCIO.read_all (Unix.in_channel_of_descr output) in
+        Unix.close output ; res
+    | WEXITED n ->
+        let m =
+          Printf.sprintf
+            "exec_and_get_stdout: abnormal termination of child process (code \
+             %d)"
+            n in
+        failwith m
+    | WSIGNALED n ->
+        let m =
+          Printf.sprintf
+            "exec_and_get_stdout: abnormal termination of child process \
+             (signal %d)"
+            n in
+        failwith m
+    | WSTOPPED n ->
+        let m =
+          Printf.sprintf
+            "exec_and_get_stdout: abnormal termination of child process \
+             (stopped %d)"
+            n in
+        failwith m )
+
+let to_json ~filename =
+  let raw_jsn =
+    exec_and_get_stdout "solc"
+      [|"solc"; "--optimize"; "--combined-json"; "abi,bin,interface"; filename|]
+  in
+  let result = Json.from_string raw_jsn in
+  try
+    let fields = Json.drop_assoc result in
+    let version = assoc "version" fields |> Json.drop_string in
+    let contracts = assoc "contracts" fields |> Json.drop_assoc in
+    let contracts =
+      List.map
+        (fun (contract_name, contract_contents) ->
+          let contents = Json.drop_assoc contract_contents in
+          let bin = assoc "bin" contents |> Json.drop_string in
+          let bin = Bitstr.(compress (Hex.of_string ("0x" ^ bin))) in
+          let abi =
+            assoc "abi" contents |> Json.drop_string |> Json.from_string
+            |> ABI.from_json in
+          {contract_name; bin; abi})
+        contracts in
+    {version; contracts}
+  with Not_found ->
+    Printf.printf "to_json: error while parsing json.\n" ;
+    print_string raw_jsn ;
+    exit 1
+
+let get_constructor ctx =
+  let constr_abi =
+    List.fold_left
+      (fun acc abi -> match abi with ABI.Constructor cs -> Some cs | _ -> acc)
+      None ctx.abi in
+  match constr_abi with
+  | None -> failwith "get_constructor: constructor not found"
+  | Some cs -> cs
+
+let get_method ctx mname =
+  List.fold_left
+    (fun acc abi ->
+      match abi with
+      | ABI.Method ms -> if ms.ABI.m_name = mname then Some ms else acc
+      | _ -> acc)
+    None ctx.abi
 
 let deploy_rpc ~(uri : string) ~(account : Types.Address.t)
     ~(contract : solidity_output) ~(arguments : ABI.value list) ?gas ?value () =

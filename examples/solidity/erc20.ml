@@ -2,7 +2,7 @@ open Lwt.Infix
 open Geth
 open Geth_lwt
 open Contract
-open Contract_lwt
+open Compile
 
 (* --------------------------------------------------------------------- *)
 (* Some helpful functions *)

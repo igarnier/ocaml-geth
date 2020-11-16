@@ -105,13 +105,6 @@ module ABI : sig
   val keccak_4_bytes : string -> Bitstr.Bit.t
 end
 
-module Compile : sig
-  type solidity_output = {version: string; contracts: solidity_contract list}
+(**/*)
 
-  and solidity_contract =
-    {contract_name: string; bin: Bitstr.Bit.t; abi: ABI.abi list}
-
-  val to_json : filename:string -> solidity_output
-  val get_constructor : solidity_contract -> ABI.constructor_abi
-  val get_method : solidity_contract -> string -> ABI.method_abi option
-end
+val assoc : string -> (string * Yojson.Safe.t) list -> Yojson.Safe.t

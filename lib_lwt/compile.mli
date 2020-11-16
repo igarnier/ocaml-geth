@@ -1,10 +1,19 @@
 open Geth
 open Contract
 
+type solidity_output = {version: string; contracts: solidity_contract list}
+
+and solidity_contract =
+  {contract_name: string; bin: Bitstr.Bit.t; abi: ABI.abi list}
+
+val to_json : filename:string -> solidity_output
+val get_constructor : solidity_contract -> ABI.constructor_abi
+val get_method : solidity_contract -> string -> ABI.method_abi option
+
 val deploy_rpc :
   uri:string ->
   account:Types.Address.t ->
-  contract:Compile.solidity_output ->
+  contract:solidity_output ->
   arguments:ABI.value list ->
   ?gas:Z.t ->
   ?value:Z.t ->
