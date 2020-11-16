@@ -1,14 +1,13 @@
 open Sigs
 
-
-(** An Ethereum address corresponding to a private key k_r is the 
+(** An Ethereum address corresponding to a private key k_r is the
     rightmost truncation to 160 bit of a 256 bit Keccak hash
     of the corresponding ECDSA public key. Cf Yellow Paper. *)
 
 (** Addresses are 20 bytes long, 40 bytes in hex form + 0x. *)
-module Address :
-sig
+module Address : sig
   type t = Bitstr.Hex.t
+
   include Equalable with type t := t
   include Showable with type t := t
 
@@ -16,9 +15,9 @@ sig
 end
 
 (** hash256 are 32 bytes long, 64 bytes in hex form + 0x. *)
-module Hash256 :
-sig
+module Hash256 : sig
   type t = Bitstr.Hex.t
+
   include Equalable with type t := t
   include Showable with type t := t
 
@@ -26,96 +25,78 @@ sig
 end
 
 (** hash512 are 64 bytes long, 128 bytes in hex form + 0x. *)
-module Hash512 :
-sig
+module Hash512 : sig
   type t = Bitstr.Hex.t
+
   include Equalable with type t := t
   include Showable with type t := t
 
   val from_string : string -> t
 end
 
-module Z :
-sig
+module Z : sig
   include module type of Z with type t = Z.t
-
   include Showable with type t := t
 end
 
 (** 10^18 Wei = 1 Ether. TODO: currently unused. *)
-type wei      = int
+type wei = int
+
 type block_id = int
 
-
 (** Transactions *)
-module Tx :
-sig
-
+module Tx : sig
   type t =
-    {
-      src       : Address.t;
-      dst       : Address.t option;
-      gas       : Z.t option;
-      gas_price : Z.t option;
-      value     : Z.t option;
-      data      : string;
-      nonce     : int option
-    }
+    { src: Address.t;
+      dst: Address.t option;
+      gas: Z.t option;
+      gas_price: Z.t option;
+      value: Z.t option;
+      data: string;
+      nonce: int option }
 
   type accepted =
-    {
-      tx : t;
-      block_hash   : Hash256.t;
-      block_number : int;
-      tx_hash      : Hash256.t;
-      tx_index     : int
-    }
+    { tx: t;
+      block_hash: Hash256.t;
+      block_number: int;
+      tx_hash: Hash256.t;
+      tx_index: int }
 
   type receipt =
-    {
-      block_hash          : Hash256.t;
-      block_number        : int;
-      contract_address    : Address.t option;
-      cumulative_gas_used : Z.t;
-      gas_used            : Z.t;
-      src                 : Address.t;
-      dst                 : Address.t option;
-      logs                : log list;
+    { block_hash: Hash256.t;
+      block_number: int;
+      contract_address: Address.t option;
+      cumulative_gas_used: Z.t;
+      gas_used: Z.t;
+      src: Address.t;
+      dst: Address.t option;
+      logs: log list;
       (* unused:
        * logs_bloom : string;
        * root : string; *)
-      transaction_hash    : Hash256.t;
-      transaction_index   : int
-    }
+      transaction_hash: Hash256.t;
+      transaction_index: int }
 
   and log =
-    {
-      log_address           : Address.t;
-      log_topics            : Hash256.t list;
-      log_data              : string; (* hex_string *)
-      log_block_number      : int;
-      log_transaction_hash  : Hash256.t;
-      log_transaction_index : int;
-      log_block_hash        : Hash256.t;
-      log_index             : int;
-      log_removed           : bool
-    }
+    { log_address: Address.t;
+      log_topics: Hash256.t list;
+      log_data: string;
+      (* hex_string *)
+      log_block_number: int;
+      log_transaction_hash: Hash256.t;
+      log_transaction_index: int;
+      log_block_hash: Hash256.t;
+      log_index: int;
+      log_removed: bool }
 
   val accepted_from_json : Json.json -> accepted
-
   val to_json : t -> Json.json
-
   val receipt_from_json : Json.json -> receipt option
-
   val show_receipt : receipt -> string
-
 end
 
-
 (** Blocks *)
-module Block :
-sig
-
+module Block : sig
   (** Fields, extracted from the JSON RPC doc of Geth.
     number: QUANTITY - the block number. null when its pending block.
     hash: DATA, 32 Bytes - hash of the block. null when its pending block.
@@ -138,95 +119,70 @@ sig
     uncles: Array - Array of uncle hashes.
   *)
   type t =
-    {
-      number        : int option;
-      hash          : Hash256.t option;
-      parent_hash   : Hash256.t;
-      nonce         : int option;
-      sha3_uncles   : Hash256.t;
-      logs_bloom    : string option;
-      transactions_root : Hash256.t;
-      state_root    : Hash256.t;
-      receipts_root : Hash256.t;
-      miner         : Address.t;
-      difficulty    : Z.t;
-      total_difficulty : Z.t;
-      extra_data    : string;
-      size          : Z.t;
-      gas_limit     : Z.t;
-      gas_used      : Z.t;
-      timestamp     : Z.t;
-      transactions  : Tx.accepted list;
-      uncles        : Hash256.t list
-    }
+    { number: int option;
+      hash: Hash256.t option;
+      parent_hash: Hash256.t;
+      nonce: int option;
+      sha3_uncles: Hash256.t;
+      logs_bloom: string option;
+      transactions_root: Hash256.t;
+      state_root: Hash256.t;
+      receipts_root: Hash256.t;
+      miner: Address.t;
+      difficulty: Z.t;
+      total_difficulty: Z.t;
+      extra_data: string;
+      size: Z.t;
+      gas_limit: Z.t;
+      gas_used: Z.t;
+      timestamp: Z.t;
+      transactions: Tx.accepted list;
+      uncles: Hash256.t list }
 
   val from_json : Json.json -> t
-
 end
 
-
-
-type port_info =
-  {
-    discovery : int;
-    listener  : int
-  }
+type port_info = {discovery: int; listener: int}
 
 type protocol_info =
-    Eth of {
-      difficulty : Z.t;
-      genesis    : Hash256.t option;
-      head       : Hash256.t;
-      network    : int option
-    }
+  | Eth of
+      { difficulty: Z.t;
+        genesis: Hash256.t option;
+        head: Hash256.t;
+        network: int option }
 
 type node_info =
-  {
-    enode       : string;
-    id          : Hash512.t;
-    ip          : string;
-    listen_addr : string;
-    name        : string;
-    ports       : port_info;
-    protocols   : protocol_info
-  }
+  { enode: string;
+    id: Hash512.t;
+    ip: string;
+    listen_addr: string;
+    name: string;
+    ports: port_info;
+    protocols: protocol_info }
 
-type network_info =
-  {
-    local_address  : string;
-    remote_address : string;
-  }
+type network_info = {local_address: string; remote_address: string}
 
 type peer =
-  {
-    caps      : string list;
-    id        : Hash512.t;
-    name      : string;
-    network   : network_info;
-    protocols : protocol_info;
-  }
+  { caps: string list;
+    id: Hash512.t;
+    name: string;
+    network: network_info;
+    protocols: protocol_info }
 
 type peer_info = peer list
 
-type block_info =
-  {
-    block_root     : Hash256.t;
-    block_accounts : ba_info list
-  }
+type block_info = {block_root: Hash256.t; block_accounts: ba_info list}
 
 and ba_info =
-  {
-    ba_account   : Address.t;
-    ba_balance   : Z.t;
-    ba_code      : Evm.bytecode;
-    ba_code_hash : Hash256.t;
-    ba_nonce     : int;
-    ba_root      : Hash256.t;
-    ba_storage   : ba_storage
-  }
+  { ba_account: Address.t;
+    ba_balance: Z.t;
+    ba_code: Evm.bytecode;
+    ba_code_hash: Hash256.t;
+    ba_nonce: int;
+    ba_root: Hash256.t;
+    ba_storage: ba_storage }
 
-and ba_storage =
-  (Hash256.t * string) list
+and ba_storage = (Hash256.t * string) list
 
 (* TODO: txpool *)
 (* type txpool =
@@ -234,14 +190,14 @@ and ba_storage =
  *     pending : txpool_info list;
  *     queued : txpool_info list
  *   }
- * 
+ *
  * and txpool_info =
  *   {
  *     (\* tx_block_hash   : hash512;
  *      * tx_block_number : int option;
  *      * tx_src          : address;
  *      * dst             :  *\)
- * 
+ *
  *         from: "0x0216d5032f356960cd3749c31ab34eeff21b3395",
  *         to: "0x7f69a91a3cf4be60020fb58b893b7cbb65376db8",
  *         gas: "0x5208",
@@ -249,14 +205,14 @@ and ba_storage =
  *         value: "0x19a99f0cf456000"
  *         no data !
  *         nonce: "0x326",
- * 
+ *
  *         blockHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
  *         blockNumber: null,
- *           
- * 
+ *
+ *
  *         hash: "0xaf953a2d01f55cfe080c0c94150a60105e8ac3d51153058a1f03dd239dd08586",
  *         input: "0x",
- *         transactionIndex: null,            
+ *         transactionIndex: null,
  *   } *)
 
 (* val transaction_to_json : transaction -> Json.json *)

@@ -1,7 +1,16 @@
 (library
  (name geth)
  (public_name geth)
- (libraries batteries yojson ssh-client cryptokit zarith hex bitstring lwt
-   lwt_log lwt.unix cohttp-lwt-unix)
- (preprocess
-  (pps bitstring.ppx lwt_ppx ppx_deriving.show ppx_deriving.eq)))
+ (preprocess (pps bitstring.ppx ppx_deriving.show ppx_deriving.eq))
+ (libraries
+   batteries
+   yojson
+   ssh-client
+   cryptokit
+   zarith
+   hex
+   bitstring
+   lwt
+   lwt_log
+   lwt.unix
+   cohttp-lwt-unix))
