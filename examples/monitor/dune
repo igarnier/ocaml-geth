@@ -1,0 +1,6 @@
+(executable
+ (modes byte exe)
+ (name monitor)
+ (modules monitor)
+ (ocamlopt_flags -O3)
+ (libraries batteries ocaml-geth))
