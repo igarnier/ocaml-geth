@@ -1,4 +1,5 @@
 open CCFun
+open Geth
 open Types
 
 module Genesis = struct
@@ -112,8 +113,6 @@ end
 (* -------------------------------------------------------------------------- *)
 (* Geth specific shell commands *)
 
-let ( // ) = Filename.concat
-
 module Geth = struct
   open Printf
 
@@ -226,7 +225,7 @@ let write_genesis genesis_block root_dir mode session =
         genesis_block |> Genesis.to_json |> Yojson.Basic.to_string in
       output_string oc json_str) ;
   Ssh_client.Easy.scp ~session ~src_path:local_genesis
-    ~dst_path:(root_dir // "genesis.json")
+    ~dst_path:(Filename.concat root_dir "genesis.json")
     ~mode
 
 (* Login to a target and pass the resulting session to a provided function *)

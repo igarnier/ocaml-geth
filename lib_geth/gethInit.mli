@@ -1,3 +1,5 @@
+open Geth
+
 module Genesis : sig
   type config =
     { chain_id: int;
@@ -18,10 +20,8 @@ module Genesis : sig
       timestamp: int }
 
   val hex_of_int : int -> string
-  val to_json : t -> Yojson.Basic.json
+  val to_json : t -> Yojson.Basic.t
 end
-
-val ( // ) : string -> string -> string
 
 module Geth : sig
   val bootnode_genkey : string -> Shell.command
