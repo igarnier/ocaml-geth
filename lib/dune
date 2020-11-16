@@ -1,8 +1,6 @@
 (library
- (name ocaml_geth)
- (public_name ocaml-geth)
- (ocamlopt_flags -g)
- (ocamlc_flags -g)
+ (name geth)
+ (public_name geth)
  (libraries batteries yojson ssh-client cryptokit zarith hex bitstring lwt
    lwt_log lwt.unix cohttp-lwt-unix)
  (preprocess

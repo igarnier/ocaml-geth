@@ -1,5 +1,5 @@
 (lang dune 2.0)
 
-(name ocaml-geth)
+(name geth)
 
 (formatting disabled)
