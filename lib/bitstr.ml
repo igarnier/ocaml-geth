@@ -29,14 +29,15 @@ module Hex = struct
       if String.length hexstr mod 2 = 0 then "0x" ^ hexstr else "0x0" ^ hexstr
 
   let of_uint = of_ubigint % Z.of_int
-  let of_int64 = of_ubigint % Z.of_int64
 
-  let of_bigint z =
-    if Z.lt z Z.zero then failwith "of_ubigint: negative argument"
-    else
-      let hexstr = Z.format "%x" z in
-      (* Geth expects its hex integers to have length mod 2 = 0 ... *)
-      if String.length hexstr mod 2 = 0 then "0x" ^ hexstr else "0x0" ^ hexstr
+  (* let of_int64 = of_ubigint % Z.of_int64 *)
+
+  (* let of_bigint z =
+   *   if Z.lt z Z.zero then failwith "of_ubigint: negative argument"
+   *   else
+   *     let hexstr = Z.format "%x" z in
+   *     (\* Geth expects its hex integers to have length mod 2 = 0 ... *\)
+   *     if String.length hexstr mod 2 = 0 then "0x" ^ hexstr else "0x0" ^ hexstr *)
 
   let of_int i =
     (* use two's complement *)
@@ -78,8 +79,6 @@ end
 module Bit = struct
   type t = Bitstring.bitstring
   type pad_direction = [`left | `right]
-
-  let copy ((s, i, j) : t) = (Stdlib.Bytes.copy s, i, j)
 
   let of_char c =
     let i = Char.code c in
@@ -163,6 +162,7 @@ module Bit = struct
     let bits = Bits.to_int bits in
     (Bitstring.takebits bits s, Bitstring.dropbits bits s)
 
+  let take_int s bits = (Bitstring.takebits bits s, Bitstring.dropbits bits s)
   let equal = Bitstring.equals
   let show = as_string
   let pp fmt bitstr = Format.pp_print_string fmt (show bitstr)

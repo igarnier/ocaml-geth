@@ -1,3 +1,4 @@
 (test
  (name test)
- (libraries geth hex))
+ (deps helloworld.sol)
+ (libraries alcotest geth geth-lwt hex))

@@ -1,5 +1,4 @@
 open CCFun
-open Yojson.Safe
 
 module Address = struct
   type t = Bitstr.Hex.t [@@deriving eq, show]

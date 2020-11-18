@@ -1,34 +1,32 @@
 module SolidityTypes : sig
-  type bitwidth = Basic.Bits.t
-  type length = StaticLength of Basic.Bytes.t | DynamicLength
+  type atom =
+    | UInt of int
+    | Int of int
+    | Address
+    | Bool
+    | Fixed of int * int
+    | UFixed of int * int
+    | NBytes of int
+    | Bytes
+    | String
+    | Function
 
-  type atomic =
-    | Tuint of {w: bitwidth}
-    | Tint of {w: bitwidth}
-    | Taddress
-    | Tbool
-    | Tfixed of {m: bitwidth; n: bitwidth}
-    | Tufixed of {m: bitwidth; n: bitwidth}
-    | Tbytes of {nbytes: length}
-    | Tstring
+  and t = Atom of atom | SArray of int * t | DArray of t | Tuple of t list
 
-  and t =
-    | Tatomic of atomic
-    | Tfunction
-    | Tstatic_array of {numel: int; typ: t}
-    | Tdynamic_array of {typ: t}
-    | Ttuple of t list
-
+  val equal : t -> t -> bool
+  val of_string : string -> (t, string) result
+  val of_string_exn : string -> t
+  val to_string : t -> string
+  val pp : Format.formatter -> t -> unit
   val is_dynamic : t -> bool
-  val uint_t : int -> t
-  val int_t : int -> t
-  val string_t : t
-  val bytes_t : t
-  val address_t : t
 
-  (**/*)
+  (** Smart contructors *)
 
-  val print : t -> string
+  val uint : int -> t
+  val int : int -> t
+  val string : t
+  val bytes : t
+  val address : t
 end
 
 module ABI : sig
@@ -44,34 +42,28 @@ module ABI : sig
     | Func of {selector: string; address: Bitstr.Hex.t}
 
   type event = {event_name: string; event_args: value list}
+  type named = {name: string; t: SolidityTypes.t; indexed: bool}
 
-  type abi =
-    | Method of method_abi
-    | Constructor of constructor_abi
-    | Event of event_abi
+  module Fun : sig
+    type t =
+      { kind: kind;
+        name: string;
+        inputs: named array;
+        outputs: named array;
+        mutability: mutability }
 
-  and constructor_abi =
-    {c_inputs: tuple_abi; c_payable: bool; c_mutability: mutability}
+    and kind = Function | Constructor | Receive | Fallback
 
-  and method_abi =
-    { m_name: string;
-      m_constant: bool;
-      m_inputs: tuple_abi;
-      m_outputs: tuple_abi;
-      m_payable: bool;
-      m_mutability: mutability;
-      m_type: mtype }
+    and mutability = Pure | View | Nonpayable | Payable
+  end
 
-  and event_abi = {e_name: string; e_inputs: tuple_abi; e_anonymous: bool}
+  module Evt : sig
+    type t = {name: string; inputs: named array; anonymous: bool}
+  end
 
-  and tuple_abi = named_arg list
+  type t = Fun of Fun.t | Event of Evt.t
 
-  and named_arg = {arg_name: string; arg_type: SolidityTypes.t}
-
-  and mtype = Function | Callback
-
-  and mutability = Pure | View | Nonpayable | Payable
-
+  val encoding : t Json_encoding.encoding
   val int256_val : int64 -> value
   val uint256_val : int64 -> value
   val string_val : string -> value
@@ -81,30 +73,24 @@ module ABI : sig
   val tuple_val : value list -> value
   val static_array_val : value list -> SolidityTypes.t -> value
   val dynamic_array_val : value list -> SolidityTypes.t -> value
-  val method_id : method_abi -> Bitstr.Bit.t
+  val method_id : Fun.t -> Bitstr.Bit.t
   val type_of : value -> SolidityTypes.t
 
   module Encode : sig
     val int64_as_uint256 : int64 -> Bitstr.Bit.t
     val int64_as_int256 : int64 -> Bitstr.Bit.t
     val address : Types.Address.t -> Bitstr.Bit.t
-    val bytes_static : string -> Basic.Bytes.t -> Bitstr.Bit.t
+    val bytes_static : string -> int -> Bitstr.Bit.t
     val bytes_dynamic : string -> Bitstr.Bit.t
     val encode : value -> Bitstr.Bit.t
   end
 
   module Decode : sig
     val decode : Bitstr.Bit.t -> SolidityTypes.t -> value
-    val decode_events : abi list -> Types.Tx.receipt -> event list
+    val decode_events : t list -> Types.Tx.receipt -> event list
   end
-
-  val from_json : Yojson.Safe.t -> abi list
 
   (**/*)
 
   val keccak_4_bytes : string -> Bitstr.Bit.t
 end
-
-(**/*)
-
-val assoc : string -> (string * Yojson.Safe.t) list -> Yojson.Safe.t

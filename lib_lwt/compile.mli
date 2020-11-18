@@ -4,11 +4,11 @@ open Contract
 type solidity_output = {version: string; contracts: solidity_contract list}
 
 and solidity_contract =
-  {contract_name: string; bin: Bitstr.Bit.t; abi: ABI.abi list}
+  {contract_name: string; bin: Bitstr.Bit.t; abi: ABI.t list}
 
 val to_json : filename:string -> solidity_output
-val get_constructor : solidity_contract -> ABI.constructor_abi
-val get_method : solidity_contract -> string -> ABI.method_abi option
+val get_constructor : solidity_contract -> ABI.Fun.t
+val get_method : solidity_contract -> string -> ABI.Fun.t option
 
 val deploy_rpc :
   uri:string ->
@@ -22,7 +22,7 @@ val deploy_rpc :
 
 val call_method_tx :
   uri:string ->
-  abi:ABI.method_abi ->
+  abi:ABI.Fun.t ->
   arguments:ABI.value list ->
   src:Types.Address.t ->
   ctx:Types.Address.t ->
@@ -41,7 +41,7 @@ val call_void_method_tx :
 
 val execute_method :
   uri:string ->
-  abi:ABI.method_abi ->
+  abi:ABI.Fun.t ->
   arguments:ABI.value list ->
   src:Types.Address.t ->
   ctx:Types.Address.t ->
@@ -52,7 +52,7 @@ val execute_method :
 
 val call_method :
   uri:string ->
-  abi:ABI.method_abi ->
+  abi:ABI.Fun.t ->
   arguments:ABI.value list ->
   src:Types.Address.t ->
   ctx:Types.Address.t ->

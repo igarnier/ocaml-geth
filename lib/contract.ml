@@ -2,76 +2,112 @@ open Basic
 
 (* https://solidity.readthedocs.io/en/develop/abi-spec.html *)
 
-let assoc key fields =
-  try List.assoc key fields
-  with Not_found ->
-    Printf.printf "assoc: key %s not found\n%!" key ;
-    Printf.printf "available fields:\n%!" ;
-    List.iter
-      (fun (field, json) ->
-        Printf.printf "%s : %s\n%!" field (Json.to_string json))
-      fields ;
-    raise Not_found
-
 module SolidityTypes = struct
-  type bitwidth = Bits.t (* mod 8 = 0, 0 < bitwidth <= 256*)
+  type atom =
+    | UInt of int
+    | Int of int
+    | Address
+    | Bool
+    | Fixed of int * int
+    | UFixed of int * int
+    | NBytes of int
+    | Bytes
+    | String
+    | Function
 
-  type length = StaticLength of Bytes.t | DynamicLength
+  and t = Atom of atom | SArray of int * t | DArray of t | Tuple of t list
+  [@@deriving eq]
 
-  type atomic =
-    | Tuint of {w: bitwidth}
-    | Tint of {w: bitwidth}
-    | Taddress
-    | Tbool
-    (* signed fixed-point decimal number of M bits, 8 <= M <= 256, M % 8 ==0, and 0 < N <= 80, which denotes the value v as v / (10 ** N). *)
-    | Tfixed of {m: bitwidth; n: bitwidth}
-    | Tufixed of {m: bitwidth; n: bitwidth}
-    | Tbytes of {nbytes: length} (* 0 < #nbytes <= 32 *)
-    | Tstring
+  let atom x = Atom x
+  let uint w = Atom (UInt w)
+  let int w = Atom (Int w)
+  let string = Atom String
+  let bytes = Atom Bytes
+  let address = Atom Address
 
-  and t =
-    | Tatomic of atomic
-    | Tfunction
-    | Tstatic_array of {numel: int; typ: t}
-    | Tdynamic_array of {typ: t}
-    | Ttuple of t list
-
-  let rec is_dynamic t =
-    match t with
-    | Tatomic (Tbytes {nbytes= DynamicLength})
-     |Tatomic Tstring
-     |Tdynamic_array _ ->
-        true
-    | Ttuple typs -> List.exists is_dynamic typs
-    | Tstatic_array {typ} when is_dynamic typ -> true
+  let rec is_dynamic = function
+    | Atom Bytes | Atom String | DArray _ -> true
+    | Tuple typs -> List.exists is_dynamic typs
+    | SArray (_, typ) when is_dynamic typ -> true
     | _ -> false
 
-  let rec print t =
-    let open Printf in
-    match t with
-    | Tatomic atomic -> (
-      match atomic with
-      | Tuint {w} -> sprintf "uint%d" (Bits.to_int w)
-      | Tint {w} -> sprintf "int%d" (Bits.to_int w)
-      | Taddress -> "address"
-      | Tbool -> "bool"
-      | Tfixed {m; n} -> sprintf "fixed%dx%d" (Bits.to_int m) (Bits.to_int n)
-      | Tufixed {m; n} -> sprintf "ufixed%dx%d" (Bits.to_int m) (Bits.to_int n)
-      | Tbytes {nbytes= StaticLength n} -> sprintf "bytes%d" (Bytes.to_int n)
-      | Tbytes {nbytes= DynamicLength} -> sprintf "bytes"
-      | Tstring -> "string" )
-    | Tfunction -> "bytes24"
-    | Tstatic_array {numel; typ} -> sprintf "%s[%d]" (print typ) numel
-    | Tdynamic_array {typ} -> sprintf "%s[]" (print typ)
-    | Ttuple types ->
-        let tys = List.map print types in
-        "(" ^ String.concat "," tys ^ ")"
+  let string_of_atom = function
+    | UInt 256 -> "uint"
+    | Int 256 -> "int"
+    | UInt w -> "uint" ^ string_of_int w
+    | Int w -> "int" ^ string_of_int w
+    | Address -> "address"
+    | Bool -> "bool"
+    | Fixed (128, 18) -> "fixed"
+    | UFixed (128, 18) -> "ufixed"
+    | Fixed (m, n) -> "fixed" ^ string_of_int m ^ "x" ^ string_of_int n
+    | UFixed (m, n) -> "ufixed" ^ string_of_int m ^ "x" ^ string_of_int n
+    | NBytes n -> "bytes" ^ string_of_int n
+    | Bytes -> "bytes"
+    | String -> "string"
+    | Function -> "function"
 
-  let uint_t w = Tatomic (Tuint {w= Bits.int w})
-  let int_t w = Tatomic (Tint {w= Bits.int w})
-  let string_t = Tatomic Tstring
-  let bytes_t = Tatomic (Tbytes {nbytes= DynamicLength})
-  let address_t = Tatomic Taddress
+  module Parser = struct
+    open Angstrom
+
+    let num =
+      take_while1 (function '0' .. '9' -> true | _ -> false) >>| int_of_string
+
+    let mxn = num >>= fun m -> char 'x' *> num >>| fun n -> (m, n)
+    let numopt = option None (num >>| Option.some)
+
+    let int =
+      option false (char 'u' >>| fun _ -> true)
+      >>= fun unsigned ->
+      string "int" *> option 256 num
+      >>| fun n -> if unsigned then UInt n else Int n
+
+    let fixed =
+      option false (char 'u' >>| fun _ -> true)
+      >>= fun unsigned ->
+      string "fixed" *> option (128, 18) mxn
+      >>| fun (m, n) -> if unsigned then UFixed (m, n) else Fixed (m, n)
+
+    let bytes = string "bytes" *> option Bytes (num >>| fun n -> NBytes n)
+    let addr = string "address" >>| fun _ -> Address
+    let bool = string "bool" >>| fun _ -> Bool
+    let str = string "string" >>| fun _ -> String
+    let func = string "function" >>| fun _ -> Function
+
+    let tl =
+      string "[]"
+      >>| (fun _ -> `Dynamic)
+      <|> (char '[' *> num <* char ']' >>| fun n -> `Static n)
+
+    let atm = map ~f:atom (choice [int; fixed; bytes; addr; bool; str; func])
+
+    let tpl expr =
+      char '(' *> sep_by (char ',') expr <* char ')' >>| fun x -> Tuple x
+
+    let expr expr =
+      atm <|> tpl expr
+      >>= fun hd ->
+      many tl
+      >>| List.fold_left
+            (fun a -> function `Static n -> SArray (n, a)
+              | `Dynamic -> DArray a)
+            hd
+
+    let t = fix expr
+  end
+
+  let of_string = Angstrom.parse_string ~consume:All Parser.t
+
+  let of_string_exn s =
+    match of_string s with Ok x -> x | Error err -> failwith err
+
+  let rec to_string = function
+    | Atom atom -> string_of_atom atom
+    | SArray (length, typ) -> to_string typ ^ "[" ^ string_of_int length ^ "]"
+    | DArray typ -> to_string typ ^ "[]"
+    | Tuple types -> "(" ^ String.concat "," (List.map to_string types) ^ ")"
+
+  let pp ppf t = Format.pp_print_string ppf (to_string t)
 end
 
 module ABI = struct
@@ -88,77 +124,134 @@ module ABI = struct
 
   type event = {event_name: string; event_args: value list}
 
-  type abi =
-    | Method of method_abi
-    | Constructor of constructor_abi
-    | Event of event_abi
+  open Json_encoding
 
-  and constructor_abi =
-    {c_inputs: tuple_abi; c_payable: bool; c_mutability: mutability}
+  type named = {name: string; t: SolidityTypes.t; indexed: bool}
 
-  and method_abi =
-    { m_name: string;
-      (* name of the method *)
-      m_constant: bool;
-      (* true if function is either Pure or View. Redundant??? *)
-      m_inputs: tuple_abi;
-      m_outputs: tuple_abi;
-      m_payable: bool;
-      (* true iff a function accepts ether *)
-      m_mutability: mutability;
-      (* purity annotation *)
-      m_type: mtype (* Kind of method. Defaults to Function if omitted *) }
+  let of_named {t; _} = t
 
-  and event_abi = {e_name: string; e_inputs: tuple_abi; e_anonymous: bool}
+  let extended =
+    let open SolidityTypes in
+    let open Angstrom in
+    choice
+      [ (Parser.t >>| fun x -> `Simple x); (string "tuple" >>| fun _ -> `Tup);
+        (string "tuple[" *> Parser.numopt <* char ']' >>| fun n -> `Tups n) ]
 
-  and tuple_abi = named_arg list
+  let typ =
+    conv
+      (fun _ -> assert false)
+      (fun x ->
+        Angstrom.parse_string ~consume:All extended x
+        |> function Error msg -> failwith msg | Ok x -> x)
+      string
 
-  and named_arg =
-    { arg_name: string;
-      arg_type: SolidityTypes.t
-          (* potential additional field for Event: indexed:bool*) }
+  let named x =
+    let construct (name, typ, components, indexed, _) =
+      match typ with
+      | `Simple t -> {name; t; indexed}
+      | `Tup -> {name; t= Tuple (List.map of_named components); indexed}
+      | `Tups None ->
+          {name; t= DArray (Tuple (List.map of_named components)); indexed}
+      | `Tups (Some n) ->
+          {name; t= SArray (n, Tuple (List.map of_named components)); indexed}
+    in
+    conv
+      (function _ -> assert false)
+      construct
+      (obj5 (req "name" string) (req "type" typ)
+         (dft "components" (list x) [])
+         (dft "indexed" bool false)
+         (dft "internalType" string ""))
 
-  and mtype = Function | Callback
+  let named = mu "named" named
 
-  and mutability =
-    | Pure (* specified to not read blockchain state *)
-    | View (* specified to not modify the blockchain state *)
-    | Nonpayable
-    | Payable
+  module Fun = struct
+    type t =
+      { kind: kind;
+        name: string;
+        inputs: named array;
+        outputs: named array;
+        mutability: mutability }
+
+    and kind = Function | Constructor | Receive | Fallback
+
+    and mutability = Pure | View | Nonpayable | Payable
+
+    let kind =
+      string_enum
+        [ ("function", Function); ("constructor", Constructor);
+          ("receive", Receive); ("fallback", Fallback) ]
+
+    let mutability =
+      string_enum
+        [ ("pure", Pure); ("view", View); ("nonpayable", Nonpayable);
+          ("payable", Payable) ]
+
+    let encoding =
+      conv
+        (fun _ -> assert false)
+        (fun (kind, name, inputs, outputs, mutability) ->
+          {kind; name; inputs; outputs; mutability})
+        (obj5 (req "type" kind) (dft "name" string "")
+           (dft "inputs" (array named) [||])
+           (dft "outputs" (array named) [||])
+           (req "stateMutability" mutability))
+  end
+
+  module Evt = struct
+    type t = {name: string; inputs: named array; anonymous: bool}
+
+    let encoding =
+      conv
+        (fun _ -> assert false)
+        (fun ((), name, inputs, anonymous) -> {name; inputs; anonymous})
+        (obj4
+           (req "type" (constant "event"))
+           (dft "name" string "")
+           (dft "inputs" (array named) [||])
+           (req "anonymous" bool))
+  end
+
+  type t = Fun of Fun.t | Event of Evt.t
+
+  let encoding =
+    union
+      [ case Fun.encoding
+          (function Fun x -> Some x | _ -> None)
+          (fun x -> Fun x);
+        case Evt.encoding
+          (function Event x -> Some x | _ -> None)
+          (fun x -> Event x) ]
 
   (* -------------------------------------------------------------------------------- *)
   (* Convenience functions to create ABI values *)
 
-  let type_of {typ} = typ
-  let int256_val (v : int64) = {desc= Int v; typ= SolidityTypes.int_t 256}
-  let uint256_val (v : int64) = {desc= Int v; typ= SolidityTypes.uint_t 256}
-  let string_val (v : string) = {desc= String v; typ= SolidityTypes.string_t}
-  let bytes_val (v : string) = {desc= String v; typ= SolidityTypes.bytes_t}
-  let bool_val (v : bool) = {desc= Bool v; typ= SolidityTypes.address_t}
+  let type_of (v : value) = v.typ
+  let int256_val (v : int64) = {desc= Int v; typ= SolidityTypes.int 256}
+  let uint256_val (v : int64) = {desc= Int v; typ= SolidityTypes.uint 256}
+  let string_val (v : string) = {desc= String v; typ= SolidityTypes.string}
+  let bytes_val (v : string) = {desc= String v; typ= SolidityTypes.bytes}
+  let bool_val (v : bool) = {desc= Bool v; typ= SolidityTypes.address}
 
   let address_val (v : Types.Address.t) =
-    {desc= Address v; typ= SolidityTypes.address_t}
+    {desc= Address v; typ= SolidityTypes.address}
 
   let tuple_val vals =
-    {desc= Tuple vals; typ= SolidityTypes.Ttuple (List.map type_of vals)}
+    {desc= Tuple vals; typ= SolidityTypes.Tuple (List.map type_of vals)}
 
   let static_array_val vals typ =
-    { desc= Tuple vals;
-      typ= SolidityTypes.Tstatic_array {numel= List.length vals; typ} }
+    {desc= Tuple vals; typ= SolidityTypes.SArray (List.length vals, typ)}
 
   let dynamic_array_val vals typ =
-    {desc= Tuple vals; typ= SolidityTypes.Tdynamic_array {typ}}
+    {desc= Tuple vals; typ= SolidityTypes.DArray typ}
 
   (* -------------------------------------------------------------------------------- *)
   (* Computing function selectors *)
 
-  open Printf
-
-  let string_of_signature m_name m_inputs =
-    let types = List.map (fun {arg_type} -> arg_type) m_inputs in
-    let encodings = List.map SolidityTypes.print types in
-    let elts = String.concat "," encodings in
-    m_name ^ "(" ^ elts ^ ")"
+  let string_of_signature name inputs =
+    let encodings = Array.map (fun {t; _} -> SolidityTypes.to_string t) inputs in
+    let elts = String.concat "," (Array.to_list encodings) in
+    name ^ "(" ^ elts ^ ")"
 
   let keccak str =
     let hash = Cryptokit.Hash.keccak 256 in
@@ -171,20 +264,19 @@ module ABI = struct
     let head = String.sub resl 0 4 in
     Bitstr.Bit.of_string head
 
-  let method_id method_abi =
-    keccak_4_bytes (string_of_signature method_abi.m_name method_abi.m_inputs)
+  let method_id {Fun.name; inputs; _} =
+    keccak_4_bytes (string_of_signature name inputs)
 
-  let event_id event_abi =
-    keccak (string_of_signature event_abi.e_name event_abi.e_inputs)
+  let event_id {Evt.name; inputs; anonymous= _} =
+    keccak (string_of_signature name inputs)
 
   (* -------------------------------------------------------------------------------- *)
 
   let header_size_of_type typ =
     let open SolidityTypes in
     match typ with
-    | Tstatic_array {numel} when not (SolidityTypes.is_dynamic typ) ->
-        32 * numel
-    | Ttuple typs when not (SolidityTypes.is_dynamic typ) ->
+    | SArray (length, _) when not (SolidityTypes.is_dynamic typ) -> 32 * length
+    | Tuple typs when not (SolidityTypes.is_dynamic typ) ->
         32 * List.length typs
     | _ -> 32
 
@@ -220,13 +312,8 @@ module ABI = struct
         ~target_bits:(Bits.int 256)
 
     let bytes_static s n =
-      if Bytes.to_int n <= 0 || Bytes.to_int n > 32 then
-        failwith "bytes_static: Bytes type has wrong length" ;
-      let len = String.length s in
-      if len <> Bytes.to_int n then
-        failwith
-          "bytes_static: string value length mistmatch with target length" ;
-      zero_pad_string_to_mod32 s
+      if String.length s < n then invalid_arg "bytes_static" ;
+      zero_pad_string_to_mod32 (String.sub s 0 n)
 
     let bytes_dynamic s =
       let len = String.length s in
@@ -238,21 +325,17 @@ module ABI = struct
        * ; *)
       Bitstr.Bit.concat [elen; zero_pad_string_to_mod32 s]
 
-    let rec encode (value : value) =
-      let {desc; typ} = value in
-      let open SolidityTypes in
-      match (value.desc, typ) with
-      | Int v, Tatomic (Tuint _) -> int64_as_uint256 v
-      | Int v, Tatomic (Tint _) -> int64_as_int256 v
-      | Bool v, Tatomic Tbool ->
+    let rec encode {typ; desc} =
+      match (desc, typ) with
+      | Int v, Atom (UInt _) -> int64_as_uint256 v
+      | Int v, Atom (Int _) -> int64_as_int256 v
+      | Bool v, Atom Bool ->
           let i = if v then 1L else 0L in
           int64_as_uint256 i
-      | Address v, Tatomic Taddress -> address v
-      | String v, Tatomic (Tbytes {nbytes= StaticLength n}) -> bytes_static v n
-      | String v, Tatomic Tstring
-       |String v, Tatomic (Tbytes {nbytes= DynamicLength}) ->
-          bytes_dynamic v
-      | Tuple values, Ttuple typs ->
+      | Address v, Atom Address -> address v
+      | String v, Atom (NBytes n) -> bytes_static v n
+      | String v, Atom String | String v, Atom Bytes -> bytes_dynamic v
+      | Tuple values, Tuple typs ->
           (* The types are implicitly contained in the values. *)
           (* compute size of header *)
           let headsz = header_size typs in
@@ -289,37 +372,36 @@ module ABI = struct
       (* Printf.eprintf "decoding %s with data %s\n" (SolidityTypes.print t) (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
       let open SolidityTypes in
       match t with
-      | Tatomic at -> decode_atomic b at
-      | Tfunction -> decode_function b
-      | Tstatic_array {numel; typ} -> decode_static_array b numel typ
-      | Tdynamic_array {typ} -> decode_dynamic_array b typ
-      | Ttuple typs -> tuple_val (decode_tuple b typs)
+      | Atom at -> decode_atomic b at
+      | SArray (length, typ) -> decode_static_array b length typ
+      | DArray typ -> decode_dynamic_array b typ
+      | Tuple typs -> tuple_val (decode_tuple b typs)
 
     and decode_atomic b at =
       (* Printf.eprintf "decoding atomic %s\n" (SolidityTypes.print (SolidityTypes.Tatomic at));       *)
       match at with
-      | Tuint {w} -> decode_uint b w
-      | Tint {w} -> decode_int b w
-      | Taddress -> address_val (decode_address b)
-      | Tbool ->
+      | UInt w -> decode_uint b w
+      | Int w -> decode_int b w
+      | Address -> address_val (decode_address b)
+      | Bool ->
           let z = Bitstr.Bit.to_unsigned_bigint b in
           bool_val (Z.gt z Z.zero)
-      | Tfixed _ | Tufixed _ ->
+      | Fixed _ | UFixed _ ->
           failwith "decode_atomic: fixed point numbers not handled yet"
-      | Tbytes {nbytes= StaticLength n} ->
-          let n = bytes_to_bits n in
-          let bytes, _ = Bitstr.Bit.take b n in
+      | NBytes n ->
+          let bytes, _ = Bitstr.Bit.take_int b (n * 8) in
           bytes_val (Bitstr.Bit.as_string bytes)
-      | Tbytes {nbytes= DynamicLength} ->
+      | Bytes ->
           let len, rem = Bitstr.Bit.take b (Bits.int 256) in
           let len = Z.to_int (Bitstr.Bit.to_unsigned_bigint len) in
           let bytes, _ = Bitstr.Bit.take rem (bytes_to_bits (Bytes.int len)) in
           bytes_val (Bitstr.Bit.as_string bytes)
-      | Tstring ->
+      | String ->
           let len, rem = Bitstr.Bit.take b (Bits.int 256) in
           let len = Z.to_int (Bitstr.Bit.to_unsigned_bigint len) in
           let bytes, _ = Bitstr.Bit.take rem (bytes_to_bits (Bytes.int len)) in
           string_val (Bitstr.Bit.as_string bytes)
+      | Function -> decode_function b
 
     and decode_address b =
       let addr, _ = Bitstr.Bit.take b (Bits.int 160) in
@@ -330,15 +412,15 @@ module ABI = struct
       let address, selector = Bitstr.Bit.take content (Bits.int 160) in
       let address = decode_address address in
       let selector = Bitstr.Bit.as_string selector in
-      {desc= Func {selector; address}; typ= SolidityTypes.Tfunction}
+      {desc= Func {selector; address}; typ= SolidityTypes.(Atom Function)}
 
-    and decode_static_array b numel t =
-      static_array_val (decode_tuple b (List.init numel (fun _ -> t))) t
+    and decode_static_array b length t =
+      static_array_val (decode_tuple b (List.init length (fun _ -> t))) t
 
     and decode_dynamic_array b t =
-      let numel, content = Bitstr.Bit.take b (Bits.int 256) in
-      let numel = Z.to_int (Bitstr.Bit.to_unsigned_bigint numel) in
-      dynamic_array_val (decode_tuple b (List.init numel (fun _ -> t))) t
+      let length, _content = Bitstr.Bit.take b (Bits.int 256) in
+      let length = Z.to_int (Bitstr.Bit.to_unsigned_bigint length) in
+      dynamic_array_val (decode_tuple b (List.init length (fun _ -> t))) t
 
     and decode_tuple b typs =
       (* Printf.eprintf "decoding tuple %s with data = %s\n"  *)
@@ -367,15 +449,15 @@ module ABI = struct
       (* Printf.eprintf "decode_uint: %s\n" (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
       let z = Bitstr.Bit.to_unsigned_bigint b in
       if Z.fits_int64 z then
-        {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint_t (Bits.to_int w)}
-      else {desc= BigInt z; typ= SolidityTypes.uint_t (Bits.to_int w)}
+        {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint w}
+      else {desc= BigInt z; typ= SolidityTypes.uint w}
 
     and decode_int b w =
       (* Printf.eprintf "decode_int: %s\n" (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
       let z = Bitstr.Bit.to_signed_bigint b in
       if Z.fits_int64 z then
-        {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint_t (Bits.to_int w)}
-      else {desc= BigInt z; typ= SolidityTypes.uint_t (Bits.to_int w)}
+        {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint w}
+      else {desc= BigInt z; typ= SolidityTypes.uint w}
 
     let decode_events abis receipt =
       let open Types.Tx in
@@ -400,105 +482,17 @@ module ABI = struct
             | [] | _ :: _ :: _ ->
                 failwith "0 or > 1 matching event for topic, aborting"
             | [hash] -> List.assoc hash codes in
-          let types = List.map (fun {arg_type} -> arg_type) event.e_inputs in
+          let types = event.inputs in
           let fields =
             match
               decode
                 (Bitstr.compress (Bitstr.Hex.of_string data))
-                (Ttuple types)
+                (Tuple (List.map (fun {t; _} -> t) (Array.to_list types)))
             with
-            | {desc= Tuple values} -> values
+            | {desc= Tuple values; _} -> values
             | exception _ -> failwith "decode_events: error while decoding"
             | _ -> failwith "decode_events: bug found" in
-          {event_name= event.e_name; event_args= fields} :: acc)
+          {event_name= event.name; event_args= fields} :: acc)
         [] receipt.logs
   end
-
-  (* -------------------------------------------------------------------------------- *)
-  (* Deserialization of ABIs from solc --json output *)
-
-  let method_type_of_json mtype =
-    match mtype with
-    | `String mtype -> (
-      match mtype with
-      | "function" -> `Method Function
-      | "callback" -> `Method Callback
-      | "constructor" -> `Constructor
-      | "event" -> `Event
-      | _ -> failwith ("method_type_of_json: incorrect method type " ^ mtype) )
-    | _ ->
-        let dump = Json.to_string mtype in
-        failwith ("type_of_json: can't decode " ^ dump)
-
-  let mutability_of_string str =
-    match str with
-    | "pure" -> Pure
-    | "view" -> View
-    | "nonpayable" -> Nonpayable
-    | "payable" -> Payable
-    | _ -> failwith ("mutability_of_string: incorrect mutability type " ^ str)
-
-  let type_of_json (json_type : Yojson.Safe.t) =
-    match json_type with
-    | `String s -> (
-        let open SolidityTypes in
-        match s with
-        | "uint8" -> Tatomic (Tuint {w= Bits.int 8})
-        | "uint16" -> Tatomic (Tuint {w= Bits.int 16})
-        | "uint32" -> Tatomic (Tuint {w= Bits.int 32})
-        | "uint64" -> Tatomic (Tuint {w= Bits.int 64})
-        | "uint128" -> Tatomic (Tuint {w= Bits.int 128})
-        | "uint256" -> Tatomic (Tuint {w= Bits.int 256})
-        | "int256 " -> Tatomic (Tint {w= Bits.int 256})
-        | "bool" -> Tatomic Tbool
-        | "string" -> Tatomic Tstring
-        | "bytes" -> Tatomic (Tbytes {nbytes= DynamicLength})
-        | "address" -> Tatomic Taddress
-        | _ -> failwith ("type_of_json: can't decode " ^ s) )
-    | _ ->
-        let dump = Json.to_string json_type in
-        failwith ("type_of_json: can't decode " ^ dump)
-
-  let signature_of_json json =
-    let json_args = Json.drop_list json in
-    ListLabels.map json_args ~f:(fun argument ->
-        let fields = Json.drop_assoc argument in
-        let arg_name = assoc "name" fields |> Json.drop_string in
-        let arg_type = assoc "type" fields |> type_of_json in
-        {arg_name; arg_type})
-
-  let from_json json =
-    ListLabels.map (Json.drop_list json) ~f:(fun method_abi ->
-        let fields = Json.drop_assoc method_abi in
-        let m_type = assoc "type" fields |> method_type_of_json in
-        match m_type with
-        | `Constructor ->
-            let c_inputs = assoc "inputs" fields |> signature_of_json in
-            let c_payable = assoc "payable" fields |> Json.drop_bool in
-            let c_mutability =
-              assoc "stateMutability" fields
-              |> Json.drop_string |> mutability_of_string in
-            Constructor {c_inputs; c_payable; c_mutability}
-        | `Method m_type ->
-            let m_name = assoc "name" fields |> Json.drop_string in
-            let m_constant = assoc "constant" fields |> Json.drop_bool in
-            let m_inputs = assoc "inputs" fields |> signature_of_json in
-            let m_outputs = assoc "outputs" fields |> signature_of_json in
-            let m_payable = assoc "payable" fields |> Json.drop_bool in
-            let m_mutability =
-              assoc "stateMutability" fields
-              |> Json.drop_string |> mutability_of_string in
-            Method
-              { m_name;
-                m_constant;
-                m_inputs;
-                m_outputs;
-                m_payable;
-                m_mutability;
-                m_type }
-        | `Event ->
-            let e_name = assoc "name" fields |> Json.drop_string in
-            let e_inputs = assoc "inputs" fields |> signature_of_json in
-            let e_anonymous = assoc "anonymous" fields |> Json.drop_bool in
-            Event {e_name; e_inputs; e_anonymous})
 end

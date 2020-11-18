@@ -1,4 +1,6 @@
+open Alcotest
 open Geth
+open Geth_lwt
 
 (* open Mlparity
  * 
@@ -72,3 +74,17 @@ module Test_Asm (X : sig end) = struct
 end
 
 module A = Test_Asm ()
+
+let compile fn () = ignore (Compile.to_json ~filename:fn)
+let compile = [("erc20", `Quick, compile "helloworld.sol")]
+
+let parse_tests =
+  [ "int"; "uint"; "int32"; "uint32"; "address"; "bool"; "fixed"; "fixed12x12";
+    "ufixed12x12"; "string"; "function"; "int[]"; "(int,int)" ]
+
+let roundtrip s =
+  let roundtrip = Contract.SolidityTypes.(to_string (of_string_exn s)) in
+  check string s s roundtrip
+
+let parse = [("basic", `Quick, fun () -> List.iter roundtrip parse_tests)]
+let () = Alcotest.run "geth" [("parser", parse); ("compile", compile)]

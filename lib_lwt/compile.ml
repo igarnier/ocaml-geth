@@ -4,7 +4,7 @@ open Contract
 type solidity_output = {version: string; contracts: solidity_contract list}
 
 and solidity_contract =
-  {contract_name: string; bin: Bitstr.Bit.t; abi: ABI.abi list}
+  {contract_name: string; bin: Bitstr.Bit.t; abi: ABI.t list}
 
 let exec_and_get_stdout command args =
   let output, input = Unix.pipe () in
@@ -44,6 +44,19 @@ let exec_and_get_stdout command args =
             n in
         failwith m )
 
+module X = Json_encoding.Make (Json_repr.Yojson)
+
+let assoc key fields =
+  try List.assoc key fields
+  with Not_found ->
+    Printf.printf "assoc: key %s not found\n%!" key ;
+    Printf.printf "available fields:\n%!" ;
+    List.iter
+      (fun (field, json) ->
+        Printf.printf "%s : %s\n%!" field (Json.to_string json))
+      fields ;
+    raise Not_found
+
 let to_json ~filename =
   let raw_jsn =
     exec_and_get_stdout "solc"
@@ -62,50 +75,51 @@ let to_json ~filename =
           let bin = Bitstr.(compress (Hex.of_string ("0x" ^ bin))) in
           let abi =
             assoc "abi" contents |> Json.drop_string |> Json.from_string
-            |> ABI.from_json in
+            |> X.destruct (Json_encoding.list Contract.ABI.encoding) in
           {contract_name; bin; abi})
         contracts in
     {version; contracts}
-  with Not_found ->
-    Printf.printf "to_json: error while parsing json.\n" ;
-    print_string raw_jsn ;
-    exit 1
+  with
+  | Not_found ->
+      print_string raw_jsn ;
+      failwith "to_json: error while parsing json"
+  | Json_encoding.Cannot_destruct (_path, exn) ->
+      Format.kasprintf failwith "%a"
+        (Json_encoding.print_error ?print_unknown:None)
+        exn
 
 let get_constructor ctx =
-  let constr_abi =
-    List.fold_left
-      (fun acc abi -> match abi with ABI.Constructor cs -> Some cs | _ -> acc)
-      None ctx.abi in
-  match constr_abi with
-  | None -> failwith "get_constructor: constructor not found"
-  | Some cs -> cs
+  List.find_map
+    (function ABI.Fun ({kind= Constructor; _} as x) -> Some x | _ -> None)
+    ctx.abi
+  |> Option.get
 
-let get_method ctx mname =
-  List.fold_left
-    (fun acc abi ->
-      match abi with
-      | ABI.Method ms -> if ms.ABI.m_name = mname then Some ms else acc
-      | _ -> acc)
-    None ctx.abi
+let get_method ctx n =
+  List.find_map
+    (function
+      | ABI.Fun ({name; _} as x) when String.equal name n -> Some x | _ -> None)
+    ctx.abi
 
 let deploy_rpc ~(uri : string) ~(account : Types.Address.t)
     ~(contract : solidity_output) ~(arguments : ABI.value list) ?gas ?value () =
   let prepare_constructor ctx =
     let constr_abi = get_constructor ctx in
-    let inputs = constr_abi.ABI.c_inputs in
+    let inputs = constr_abi.inputs in
     let encoded =
       match arguments with
       | [] -> Bitstring.empty_bitstring
       | _ ->
+          let open SolidityTypes in
           List.iter2
             (fun v t ->
-              if not (ABI.type_of v = t.ABI.arg_type) then
-                let typeof_v = SolidityTypes.print (ABI.type_of v) in
-                let arg_typ = SolidityTypes.print t.ABI.arg_type in
-                failwith
-                  ( "deploy_rpc: constructor argument types do not match \
-                     constructor declaration: " ^ typeof_v ^ " vs " ^ arg_typ ))
-            arguments inputs ;
+              if not (equal (ABI.type_of v) t.ABI.t) then
+                let typeof_v = ABI.type_of v in
+                let arg_typ = t.ABI.t in
+                Format.kasprintf failwith
+                  "deploy_rpc: constructor argument types do not match \
+                   constructor declaration: %a vs %a"
+                  pp typeof_v pp arg_typ)
+            arguments (Array.to_list inputs) ;
           ABI.(Encode.encode (ABI.tuple_val arguments)) in
     Bitstr.(uncompress (Bit.concat [ctx.bin; encoded])) in
   let rec loop ctxs =
@@ -120,12 +134,12 @@ let deploy_rpc ~(uri : string) ~(account : Types.Address.t)
             ?value () ) in
   loop contract.contracts
 
-let call_method_tx ~(uri : string) ~(abi : ABI.method_abi)
+let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
     ~(arguments : ABI.value list) ~(src : Types.Address.t)
     ~(ctx : Types.Address.t) ?gas ?value () =
-  let mname = abi.m_name in
-  let inputs = abi.ABI.m_inputs in
-  let siglen = List.length inputs in
+  let mname = abi.name in
+  let inputs = abi.inputs in
+  let siglen = Array.length inputs in
   let arglen = List.length arguments in
   if siglen <> arglen then (
     let m =
@@ -169,14 +183,13 @@ let call_void_method_tx ~mname ~(src : Types.Address.t) ~(ctx : Types.Address.t)
       nonce= None } in
   Lwt.return tx
 
-let execute_method ~(uri : string) ~(abi : ABI.method_abi)
+let execute_method ~(uri : string) ~(abi : ABI.Fun.t)
     ~(arguments : ABI.value list) ~(src : Types.Address.t)
     ~(ctx : Types.Address.t) ?gas ?value () =
   let%lwt tx = call_method_tx ~uri ~abi ~arguments ~src ~ctx ?gas ?value () in
   Rpc.Eth.send_transaction_and_get_receipt ~uri ~transaction:tx
 
-let call_method ~(uri : string) ~(abi : ABI.method_abi)
-    ~(arguments : ABI.value list) ~(src : Types.Address.t)
-    ~(ctx : Types.Address.t) ?gas ?value () =
+let call_method ~(uri : string) ~(abi : ABI.Fun.t) ~(arguments : ABI.value list)
+    ~(src : Types.Address.t) ~(ctx : Types.Address.t) ?gas ?value () =
   let%lwt tx = call_method_tx ~uri ~abi ~arguments ~src ~ctx ?gas ?value () in
   Rpc.Eth.call ~uri ~transaction:tx ~at_time:`latest

@@ -11,6 +11,7 @@ module Hex : sig
   val of_bigint : Z.t -> t
   val of_char : char -> t
   val of_int64 : int64 -> t
+  val of_uint : int -> t
   val of_string : string -> t
   val as_string : t -> string
   val length : t -> Bytes.t
@@ -40,6 +41,7 @@ module Bit : sig
   (* val neg : t -> t *)
 
   val take : t -> Bits.t -> t * t
+  val take_int : t -> int -> t * t
 end
 
 val compress : Hex.t -> Bit.t
