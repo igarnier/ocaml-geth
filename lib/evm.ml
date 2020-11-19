@@ -603,8 +603,7 @@ let deploy (program : bytecode) =
       Instr RETURN ] in
   deploy_code @ program
 
-let parse_hexstring (str : Bitstr.Hex.t) =
-  let compressed = Bitstr.(Bit.to_string (compress str)) in
+let parse data =
   let rec loop bc acc =
     match bc with
     | [] -> List.rev acc
@@ -620,7 +619,7 @@ let parse_hexstring (str : Bitstr.Hex.t) =
         let result =
           try Instr (codeop code) with WrongOpcode _ -> MissingOpcode code in
         loop tail (result :: acc) in
-  loop (List.of_seq (String.to_seq compressed)) []
+  loop (List.of_seq (String.to_seq data)) []
 
 (* let deploy (program : bytecode) =
  *   let prog_len = length program in

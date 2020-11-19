@@ -1,3 +1,5 @@
+open Types
+
 module SolidityTypes : sig
   type atom =
     | UInt of int
@@ -37,9 +39,9 @@ module ABI : sig
     | BigInt of Z.t
     | Bool of bool
     | String of string
-    | Address of Types.Address.t
+    | Address of Address.t
     | Tuple of value list
-    | Func of {selector: string; address: Bitstr.Hex.t}
+    | Func of {selector: string; address: Address.t}
 
   type event = {event_name: string; event_args: value list}
   type named = {name: string; t: SolidityTypes.t; indexed: bool}
@@ -70,7 +72,7 @@ module ABI : sig
   val string_val : string -> value
   val bytes_val : string -> value
   val bool_val : bool -> value
-  val address_val : Types.Address.t -> value
+  val address_val : Address.t -> value
   val tuple_val : value list -> value
   val static_array_val : value list -> SolidityTypes.t -> value
   val dynamic_array_val : value list -> SolidityTypes.t -> value
@@ -80,7 +82,7 @@ module ABI : sig
   module Encode : sig
     val int64_as_uint256 : int64 -> Bitstr.Bit.t
     val int64_as_int256 : int64 -> Bitstr.Bit.t
-    val address : Types.Address.t -> Bitstr.Bit.t
+    val address : Address.t -> Bitstr.Bit.t
     val bytes_static : string -> int -> Bitstr.Bit.t
     val bytes_dynamic : string -> Bitstr.Bit.t
     val encode : value -> Bitstr.Bit.t
@@ -88,7 +90,7 @@ module ABI : sig
 
   module Decode : sig
     val decode : Bitstr.Bit.t -> SolidityTypes.t -> value
-    val decode_events : t list -> Types.Tx.receipt -> event list
+    val decode_events : t list -> Tx.receipt -> event list
   end
 
   (**/*)

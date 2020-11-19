@@ -1,3 +1,4 @@
+open Types
 open Basic
 
 (* https://solidity.readthedocs.io/en/develop/abi-spec.html *)
@@ -118,9 +119,9 @@ module ABI = struct
     | BigInt of Z.t
     | Bool of bool
     | String of string
-    | Address of Types.Address.t
+    | Address of Address.t
     | Tuple of value list
-    | Func of {selector: string; address: Bitstr.Hex.t}
+    | Func of {selector: string; address: Address.t}
 
   type event = {event_name: string; event_args: value list}
 
@@ -237,9 +238,7 @@ module ABI = struct
   let string_val (v : string) = {desc= String v; typ= SolidityTypes.string}
   let bytes_val (v : string) = {desc= String v; typ= SolidityTypes.bytes}
   let bool_val (v : bool) = {desc= Bool v; typ= SolidityTypes.address}
-
-  let address_val (v : Types.Address.t) =
-    {desc= Address v; typ= SolidityTypes.address}
+  let address_val (v : Address.t) = {desc= Address v; typ= SolidityTypes.address}
 
   let tuple_val vals =
     {desc= Tuple vals; typ= SolidityTypes.Tuple (List.map type_of vals)}
@@ -311,10 +310,9 @@ module ABI = struct
 
     let int64_as_int256 (i : int64) = Bitstr.Bit.of_bigint 256 (Z.of_int64 i)
 
-    let address (s : Types.Address.t) =
-      let encoded = Bitstr.compress s in
-      Bitstr.Bit.zero_pad_to ~dir:`left ~bits:encoded
-        ~target_bits:(Bits.int 256)
+    let address (s : Address.t) =
+      let bits = Bitstring.bitstring_of_string (s :> string) in
+      Bitstr.Bit.zero_pad_to ~dir:`left ~bits ~target_bits:(Bits.int 256)
 
     let bytes_static s n =
       if String.length s < n then invalid_arg "bytes_static" ;
@@ -410,7 +408,7 @@ module ABI = struct
 
     and decode_address b =
       let addr, _ = Bitstr.Bit.take b (Bits.int 160) in
-      Bitstr.uncompress addr
+      Address.of_binary (Bitstring.string_of_bitstring addr)
 
     and decode_function b =
       let content, _ = Bitstr.Bit.take b (Bits.int (160 + 32)) in
@@ -465,13 +463,13 @@ module ABI = struct
       else {desc= BigInt z; typ= SolidityTypes.uint w}
 
     let decode_events abis receipt =
-      let open Types.Tx in
+      let open Tx in
       let codes =
         List.fold_left
           (fun acc abi ->
             match abi with
             | Event event_abi ->
-                let id = Bitstr.uncompress (event_id event_abi) in
+                let id = Bitstr.Bit.to_0x (event_id event_abi) in
                 (id, event_abi) :: acc
             | _ -> acc)
           [] abis in
@@ -481,7 +479,9 @@ module ABI = struct
           let data = log.data in
           (* Check whether /at most one/ topic corresponds to an event *)
           let relevant =
-            List.filter (fun hash -> List.mem_assoc hash codes) topics in
+            List.filter
+              (fun hash -> List.mem_assoc hash codes)
+              (topics :> string list) in
           let event =
             match relevant with
             | [] | _ :: _ :: _ ->
@@ -491,7 +491,7 @@ module ABI = struct
           let fields =
             match
               decode
-                (Bitstr.compress (Bitstr.Hex.of_string data))
+                (Bitstring.bitstring_of_string data)
                 (Tuple (List.map (fun {t; _} -> t) (Array.to_list types)))
             with
             | {desc= Tuple values; _} -> values

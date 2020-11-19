@@ -145,7 +145,7 @@ module Eth = struct
   let syncing ~uri = rpc_call uri "eth_syncing" `Null |>> Get.bool
 
   let coinbase ~uri =
-    rpc_call uri "eth_coinbase" `Null |>> Address.from_string % Get.string
+    rpc_call uri "eth_coinbase" `Null |>> Address.of_0x % Get.string
 
   let mining ~uri = rpc_call uri "eth_mining" `Null |>> Get.bool
   let hashrate ~uri = rpc_call uri "eth_hashrate" `Null |>> Get.bigint_as_string
@@ -155,8 +155,7 @@ module Eth = struct
 
   let accounts ~uri =
     rpc_call uri "eth_accounts" `Null
-    |>> Get.string_list
-    |>> List.map Address.from_string
+    |>> Get.string_list |>> List.map Address.of_0x
 
   let block_number ~uri =
     rpc_call uri "eth_blockNumber" `Null |>> Get.int_as_string
@@ -212,13 +211,11 @@ module Eth = struct
 
   let send_transaction ~uri ~transaction =
     let args = `List [Tx.to_json transaction] in
-    rpc_call uri "eth_sendTransaction" args
-    |>> Get.string |>> Hash256.from_string
+    rpc_call uri "eth_sendTransaction" args |>> Get.string |>> Hash256.of_0x
 
   let send_raw_transaction ~uri ~data =
     let args = `List [`String data] in
-    rpc_call uri "eth_sendRawTransaction" args
-    |>> Get.string |>> Hash256.from_string
+    rpc_call uri "eth_sendRawTransaction" args |>> Get.string |>> Hash256.of_0x
 
   let call ~uri ~transaction ~(at_time : time) =
     rpc_call uri "eth_call"
@@ -275,13 +272,8 @@ module Eth = struct
   let send_contract_and_get_receipt ~uri ~src ~data ?gas ?value () =
     let open Tx in
     let tx =
-      { src;
-        dst= None;
-        gas= None;
-        gas_price= None;
-        value;
-        data= Bitstr.Hex.to_string data;
-        nonce= None } in
+      {src; dst= None; gas= None; gas_price= None; value; data; nonce= None}
+    in
     let%lwt tx =
       match gas with
       | None ->
@@ -361,12 +353,11 @@ module Personal = struct
               ("to", `String (Address.show dst)); ("value", Json.zhex value) ];
           `String src_pwd ] in
     rpc_call uri "personal_sendTransaction" args
-    |>> Get.string |>> Hash256.from_string
+    |>> Get.string |>> Hash256.of_0x
 
   let new_account ~uri ~passphrase =
     let args = `List [`String passphrase] in
-    rpc_call uri "personal_newAccount" args
-    |>> Get.string |>> Address.from_string
+    rpc_call uri "personal_newAccount" args |>> Get.string |>> Address.of_0x
 
   let unlock_account ~uri ~account ~passphrase ~unlock_duration =
     let args =

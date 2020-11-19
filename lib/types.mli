@@ -2,26 +2,22 @@
     rightmost truncation to 160 bit of a 256 bit Keccak hash
     of the corresponding ECDSA public key. Cf Yellow Paper. *)
 
-(** Addresses are 20 bytes long, 40 bytes in hex form + 0x. *)
-module Address : sig
-  type t = Bitstr.Hex.t [@@deriving eq, show]
+module type BINARY = sig
+  type t = private string [@@deriving ord, eq, show]
 
-  val from_string : string -> t
+  val of_0x : string -> t
+  val of_hex : Hex.t -> t
+  val of_binary : ?pos:int -> string -> t
 end
+
+(** Addresses are 20 bytes long, 40 bytes in hex form + 0x. *)
+module Address : BINARY
 
 (** hash256 are 32 bytes long, 64 bytes in hex form + 0x. *)
-module Hash256 : sig
-  type t = Bitstr.Hex.t [@@deriving eq, show]
-
-  val from_string : string -> t
-end
+module Hash256 : BINARY
 
 (** hash512 are 64 bytes long, 128 bytes in hex form + 0x. *)
-module Hash512 : sig
-  type t = Bitstr.Hex.t [@@deriving eq, show]
-
-  val from_string : string -> t
-end
+module Hash512 : BINARY
 
 module Z : sig
   include module type of Z with type t = Z.t

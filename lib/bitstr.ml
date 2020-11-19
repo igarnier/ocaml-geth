@@ -1,80 +1,4 @@
-open CCFun
 open Basic
-
-(* This is an external library whose name clashes with a module defined here. *)
-module ExtHx = Hex
-
-module Hex = struct
-  type t = string [@@deriving eq]
-
-  let char_is_hex = function
-    | '0' .. '9' | 'A' .. 'F' | 'a' .. 'f' -> true
-    | _ -> false
-
-  let is_hex (x : string) =
-    let rec loop i len x acc =
-      if i >= len || not acc then acc
-      else loop (i + 1) len x (char_is_hex x.[i]) in
-    let len = String.length x in
-    if len < 2 then failwith "is_hex: string too short"
-    else
-      let prefix = String.sub x 0 2 in
-      match prefix with "0x" | "0X" -> loop 2 len x true | _ -> false
-
-  let of_ubigint z =
-    if Z.lt z Z.zero then failwith "of_ubigint: negative argument"
-    else
-      let hexstr = Z.format "%x" z in
-      (* Geth expects its hex integers to have length mod 2 = 0 ... *)
-      if String.length hexstr mod 2 = 0 then "0x" ^ hexstr else "0x0" ^ hexstr
-
-  let of_uint = of_ubigint % Z.of_int
-
-  (* let of_int64 = of_ubigint % Z.of_int64 *)
-
-  (* let of_bigint z =
-   *   if Z.lt z Z.zero then failwith "of_ubigint: negative argument"
-   *   else
-   *     let hexstr = Z.format "%x" z in
-   *     (\* Geth expects its hex integers to have length mod 2 = 0 ... *\)
-   *     if String.length hexstr mod 2 = 0 then "0x" ^ hexstr else "0x0" ^ hexstr *)
-
-  let of_int i =
-    (* use two's complement *)
-    let hexstr = Printf.sprintf "%x" i in
-    if String.length hexstr mod 2 = 0 then "0x" ^ hexstr
-    else if i < 0 then "0xf" ^ hexstr
-    else "0x0" ^ hexstr
-
-  let of_char c = of_int (Char.code c)
-
-  let of_string string =
-    if not (is_hex string) then
-      failwith "hex_of_string: " ^ string ^ " not a hex string"
-    else string
-
-  let of_int64 (i : int64) =
-    let hexstr = Printf.sprintf "%Lx" i in
-    if String.length hexstr mod 2 = 0 then "0x" ^ hexstr
-    else if i < 0L then (* two's complement! *)
-      "0xf" ^ hexstr
-    else "0x0" ^ hexstr
-
-  let of_bigint (z : Z.t) =
-    let hexstr = Z.format "%x" z in
-    if Z.geq z Z.zero then
-      if String.length hexstr mod 2 = 0 then "0x" ^ hexstr else "0x0" ^ hexstr
-    else if Z.fits_int64 z then of_int64 (Z.to_int64 z)
-    else
-      failwith
-        "of_bigint: can't handle two's complement for really big bigints :( \
-         TODO"
-
-  let to_string x = x
-  let length (x : t) = Bytes.int ((String.length x - 2) / 2)
-  let show = of_string
-  let pp fmt s = Format.pp_print_string fmt (of_string s)
-end
 
 module Bit = struct
   type t = Bitstring.bitstring
@@ -167,6 +91,10 @@ module Bit = struct
   let show = to_string
   let pp fmt bitstr = Format.pp_print_string fmt (show bitstr)
 
+  let to_0x x =
+    let (`Hex x) = Hex.of_string (Bitstring.string_of_bitstring x) in
+    "0x" ^ x
+
   (* let of_char c =
    *   compress_ (Hex.of_char c)
    * 
@@ -242,17 +170,3 @@ module Bit = struct
    *   let tail  = String.tail bits bytes in
    *   (head, tail) *)
 end
-
-let compress_ (x : Hex.t) : string =
-  assert (Hex.is_hex x) ;
-  let stripped =
-    let len = String.length x in
-    String.sub x (len - 2) 2 in
-  try ExtHx.to_string (`Hex stripped)
-  with Invalid_argument s -> raise (Invalid_argument (s ^ ": " ^ x))
-
-let compress (x : Hex.t) : Bit.t = Bit.of_string (compress_ x)
-
-let uncompress (x : Bit.t) : Hex.t =
-  let (`Hex result) = ExtHx.of_string (Bit.to_string x) in
-  "0x" ^ result

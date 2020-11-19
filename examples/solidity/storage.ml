@@ -120,9 +120,7 @@ struct
 end
 
 module X = struct
-  let account =
-    Types.Address.from_string "0x0cb903d0139c1322a52f70038332efd363f94ea8"
-
+  let account = Types.Address.of_0x "0x0cb903d0139c1322a52f70038332efd363f94ea8"
   let uri = "http://localhost:8545"
 end
 

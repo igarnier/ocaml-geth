@@ -161,7 +161,7 @@ module Ops : sig
   val dup : int -> instr_code
 end
 
-val parse_hexstring : Bitstr.Hex.t -> bytecode
+val parse : string -> bytecode
 val literal_of_int : int -> literal
 val literal_width : literal -> int
 val length : bytecode -> int

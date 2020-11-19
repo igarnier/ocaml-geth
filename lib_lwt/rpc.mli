@@ -57,7 +57,7 @@ module Eth : sig
   val send_contract_and_get_receipt :
     uri:string ->
     src:Address.t ->
-    data:Bitstr.Hex.t ->
+    data:string ->
     ?gas:Z.t ->
     ?value:Z.t ->
     unit ->
