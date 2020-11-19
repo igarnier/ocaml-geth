@@ -76,7 +76,8 @@ end
 module A = Test_Asm ()
 
 let compile fn () = ignore (Compile.to_json ~filename:fn)
-let compile = [("erc20", `Quick, compile "helloworld.sol")]
+let contracts = ["helloworld.sol"]
+let compile = List.map (fun s -> (s, `Quick, compile s)) contracts
 
 let parse_tests =
   [ "int"; "uint"; "int32"; "uint32"; "address"; "bool"; "fixed"; "fixed12x12";

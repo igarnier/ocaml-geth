@@ -604,7 +604,7 @@ let deploy (program : bytecode) =
   deploy_code @ program
 
 let parse_hexstring (str : Bitstr.Hex.t) =
-  let compressed = Bitstr.(Bit.as_string (compress str)) in
+  let compressed = Bitstr.(Bit.to_string (compress str)) in
   let rec loop bc acc =
     match bc with
     | [] -> List.rev acc

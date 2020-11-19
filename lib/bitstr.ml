@@ -70,7 +70,7 @@ module Hex = struct
         "of_bigint: can't handle two's complement for really big bigints :( \
          TODO"
 
-  let as_string x = x
+  let to_string x = x
   let length (x : t) = Bytes.int ((String.length x - 2) / 2)
   let show = of_string
   let pp fmt s = Format.pp_print_string fmt (of_string s)
@@ -117,7 +117,7 @@ module Bit = struct
     Z.of_bits (CCString.rev (Bitstring.string_of_bitstring s))
 
   let of_string = Bitstring.bitstring_of_string
-  let as_string = Bitstring.string_of_bitstring
+  let to_string = Bitstring.string_of_bitstring
   let length s = Bits.int (Bitstring.bitstring_length s)
 
   let zero_padding ~(dir : pad_direction) ~bits ~(zeroes : Bits.t) =
@@ -164,7 +164,7 @@ module Bit = struct
 
   let take_int s bits = (Bitstring.takebits bits s, Bitstring.dropbits bits s)
   let equal = Bitstring.equals
-  let show = as_string
+  let show = to_string
   let pp fmt bitstr = Format.pp_print_string fmt (show bitstr)
 
   (* let of_char c =
@@ -176,7 +176,7 @@ module Bit = struct
    * let of_string (s : string) =
    *   (s : t)
    * 
-   * let as_string (s : t) =
+   * let to_string (s : t) =
    *   (s : string)
    * 
    * 
@@ -254,5 +254,5 @@ let compress_ (x : Hex.t) : string =
 let compress (x : Hex.t) : Bit.t = Bit.of_string (compress_ x)
 
 let uncompress (x : Bit.t) : Hex.t =
-  let (`Hex result) = ExtHx.of_string (Bit.as_string x) in
+  let (`Hex result) = ExtHx.of_string (Bit.to_string x) in
   "0x" ^ result

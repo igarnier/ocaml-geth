@@ -63,6 +63,7 @@ module ABI : sig
 
   type t = Fun of Fun.t | Event of Evt.t
 
+  val is_constructor : Fun.t -> bool
   val encoding : t Json_encoding.encoding
   val int256_val : int64 -> value
   val uint256_val : int64 -> value
@@ -94,3 +95,10 @@ module ABI : sig
 
   val keccak_4_bytes : string -> Bitstr.Bit.t
 end
+
+type t = {contracts: (string * contract) list; version: string}
+
+and contract = {abi: ABI.t list; bin: Bitstring.t}
+
+val find_function : contract -> string -> ABI.Fun.t option
+val encoding : t Json_encoding.encoding

@@ -66,8 +66,8 @@ struct
 
   let find_method mname =
     List.fold_left
-      (fun acc ctx ->
-        let res = Compile.get_method ctx mname in
+      (fun acc (_name, c) ->
+        let res = Contract.find_function c mname in
         match res with None -> acc | Some _ -> res)
       None solidity_output.contracts
 

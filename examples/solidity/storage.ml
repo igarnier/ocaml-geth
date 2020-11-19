@@ -81,13 +81,11 @@ struct
   let contract =
     match solidity_output.contracts with
     | [] | _ :: _ :: _ -> failwith "Storage: more than one contract"
-    | [ctx] -> ctx
-
-  let find_method mname = Compile.get_method contract mname
+    | [(_, ctx)] -> ctx
 
   let set =
     let set_abi =
-      match find_method "set" with
+      match Contract.find_function contract "set" with
       | None -> failwith "set method not found in solidity output"
       | Some abi -> abi in
     fun i ->
@@ -99,7 +97,7 @@ struct
 
   let get =
     let get_abi =
-      match find_method "get" with
+      match Contract.find_function contract "get" with
       | None -> failwith "get method not found in solidity output"
       | Some abi -> abi in
     fun () ->

@@ -32,7 +32,7 @@ let rpc_call uri method_name (params : Yojson.Safe.t) =
       | [reply] ->
           print_debug
             (Printf.sprintf "Ocaml_geth.Rpc.call: raw reply =\n%s\n" reply) ;%lwt
-          Lwt.return (Json.from_string reply)
+          Lwt.return (Yojson.Safe.from_string reply)
       | _ ->
           Lwt.fail_with
             "Ocaml_geth.Rpc.rpc_call: error, cannot interpret multi-part reply"
@@ -264,7 +264,7 @@ module Eth = struct
    *       gas   = None;
    *       gas_price = None;
    *       value;
-   *       data  = Bitstr.Hex.as_string data;
+   *       data  = Bitstr.Hex.to_string data;
    *       nonce = None
    *     }
    *   in
@@ -280,7 +280,7 @@ module Eth = struct
         gas= None;
         gas_price= None;
         value;
-        data= Bitstr.Hex.as_string data;
+        data= Bitstr.Hex.to_string data;
         nonce= None } in
     let%lwt tx =
       match gas with
@@ -318,7 +318,7 @@ end
  *    *       gas   = None;
  *    *       gas_price = None;
  *    *       value;
- *    *       data  = Bitstr.Hex.as_string data;
+ *    *       data  = Bitstr.Hex.to_string data;
  *    *       nonce = None
  *    *     }
  *    *   in
@@ -335,7 +335,7 @@ end
  *         gas   = None;
  *         gas_price = None;
  *         value;
- *         data  = Bitstr.Hex.as_string data;
+ *         data  = Bitstr.Hex.to_string data;
  *         nonce = None
  *       }
  *     in
@@ -353,7 +353,7 @@ end
 
 module Personal = struct
   let send_transaction ~uri ~src ~dst ~value ~src_pwd =
-    (* let value = Bitstr.(hex_as_string (hex_of_bigint value)) in *)
+    (* let value = Bitstr.(hex_to_string (hex_of_bigint value)) in *)
     let args =
       `List
         [ `Assoc

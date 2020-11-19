@@ -13,7 +13,7 @@ module Hex : sig
   val of_int64 : int64 -> t
   val of_uint : int -> t
   val of_string : string -> t
-  val as_string : t -> string
+  val to_string : t -> string
   val length : t -> Bytes.t
 end
 
@@ -30,7 +30,7 @@ module Bit : sig
   val of_bigint : int -> Z.t -> t
   val to_signed_bigint : t -> Z.t
   val to_unsigned_bigint : t -> Z.t
-  val as_string : t -> string
+  val to_string : t -> string
   val length : t -> Bits.t
   val zero_padding : dir:pad_direction -> bits:t -> zeroes:Bits.t -> t
   val one_padding : dir:pad_direction -> bits:t -> ones:Bits.t -> t

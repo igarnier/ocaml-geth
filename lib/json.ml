@@ -127,6 +127,3 @@ module GetExn = struct
   let string json = json |> result |> drop_string
   let string_list json = json |> result |> List.map drop_string % drop_list
 end
-
-let from_string x = Yojson.Safe.from_string x
-let to_string x = Yojson.Safe.to_string x

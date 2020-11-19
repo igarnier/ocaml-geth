@@ -214,6 +214,10 @@ module ABI = struct
 
   type t = Fun of Fun.t | Event of Evt.t
 
+  let is_constructor = function
+    | {Fun.kind= Constructor; _} -> true
+    | _ -> false
+
   let encoding =
     union
       [ case Fun.encoding
@@ -390,17 +394,17 @@ module ABI = struct
           failwith "decode_atomic: fixed point numbers not handled yet"
       | NBytes n ->
           let bytes, _ = Bitstr.Bit.take_int b (n * 8) in
-          bytes_val (Bitstr.Bit.as_string bytes)
+          bytes_val (Bitstr.Bit.to_string bytes)
       | Bytes ->
           let len, rem = Bitstr.Bit.take b (Bits.int 256) in
           let len = Z.to_int (Bitstr.Bit.to_unsigned_bigint len) in
           let bytes, _ = Bitstr.Bit.take rem (bytes_to_bits (Bytes.int len)) in
-          bytes_val (Bitstr.Bit.as_string bytes)
+          bytes_val (Bitstr.Bit.to_string bytes)
       | String ->
           let len, rem = Bitstr.Bit.take b (Bits.int 256) in
           let len = Z.to_int (Bitstr.Bit.to_unsigned_bigint len) in
           let bytes, _ = Bitstr.Bit.take rem (bytes_to_bits (Bytes.int len)) in
-          string_val (Bitstr.Bit.as_string bytes)
+          string_val (Bitstr.Bit.to_string bytes)
       | Function -> decode_function b
 
     and decode_address b =
@@ -411,7 +415,7 @@ module ABI = struct
       let content, _ = Bitstr.Bit.take b (Bits.int (160 + 32)) in
       let address, selector = Bitstr.Bit.take content (Bits.int 160) in
       let address = decode_address address in
-      let selector = Bitstr.Bit.as_string selector in
+      let selector = Bitstr.Bit.to_string selector in
       {desc= Func {selector; address}; typ= SolidityTypes.(Atom Function)}
 
     and decode_static_array b length t =
@@ -425,7 +429,7 @@ module ABI = struct
     and decode_tuple b typs =
       (* Printf.eprintf "decoding tuple %s with data = %s\n"  *)
       (*   (SolidityTypes.print (SolidityTypes.Ttuple typs))
-       *   (Bitstr.Hex.as_string (Bitstr.uncompress b))
+       *   (Bitstr.Hex.to_string (Bitstr.uncompress b))
        * ; *)
       let _, values =
         List.fold_left
@@ -446,14 +450,14 @@ module ABI = struct
       List.rev values
 
     and decode_uint (b : Bitstr.Bit.t) w =
-      (* Printf.eprintf "decode_uint: %s\n" (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
+      (* Printf.eprintf "decode_uint: %s\n" (Bitstr.Hex.to_string (Bitstr.uncompress b)); *)
       let z = Bitstr.Bit.to_unsigned_bigint b in
       if Z.fits_int64 z then
         {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint w}
       else {desc= BigInt z; typ= SolidityTypes.uint w}
 
     and decode_int b w =
-      (* Printf.eprintf "decode_int: %s\n" (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
+      (* Printf.eprintf "decode_int: %s\n" (Bitstr.Hex.to_string (Bitstr.uncompress b)); *)
       let z = Bitstr.Bit.to_signed_bigint b in
       if Z.fits_int64 z then
         {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint w}
@@ -496,3 +500,36 @@ module ABI = struct
         [] receipt.logs
   end
 end
+
+open Json_encoding
+
+type t = {contracts: (string * contract) list; version: string}
+
+and contract = {abi: ABI.t list; bin: Bitstring.t}
+
+let find_function {abi; _} name =
+  List.find_map
+    (function ABI.Fun x when String.equal x.name name -> Some x | _ -> None)
+    abi
+
+let hex = conv Bitstr.Bit.to_string Bitstr.Bit.of_string string
+
+module X = Json_encoding.Make (Json_repr.Yojson)
+
+let abis =
+  conv
+    (fun _ -> assert false)
+    (fun x -> X.destruct (list ABI.encoding) (Yojson.Safe.from_string x))
+    string
+
+let contract =
+  conv
+    (fun {abi; bin} -> (abi, bin))
+    (fun (abi, bin) -> {abi; bin})
+    (obj2 (req "abi" abis) (dft "bin" hex Bitstring.empty_bitstring))
+
+let encoding =
+  conv
+    (fun {contracts; version} -> (contracts, version))
+    (fun (contracts, version) -> {contracts; version})
+    (obj2 (req "contracts" (assoc contract)) (req "version" string))

@@ -43,6 +43,3 @@ module GetExn : sig
   val string : t -> string
   val string_list : t -> string list
 end
-
-val from_string : string -> t
-val to_string : t -> string
