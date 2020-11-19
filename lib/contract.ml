@@ -260,13 +260,13 @@ module ABI = struct
   let keccak str =
     let hash = Cryptokit.Hash.keccak 256 in
     let resl = Cryptokit.hash_string hash str in
-    Bitstr.Bit.of_string resl
+    Bitstr.of_string resl
 
   let keccak_4_bytes str =
     let hash = Cryptokit.Hash.keccak 256 in
     let resl = Cryptokit.hash_string hash str in
     let head = String.sub resl 0 4 in
-    Bitstr.Bit.of_string head
+    Bitstr.of_string head
 
   let method_id {Fun.name; inputs; _} =
     keccak_4_bytes (string_of_signature name inputs)
@@ -300,19 +300,19 @@ module ABI = struct
           else
             let pad = 32 - rem in
             s ^ String.make pad '\000' in
-      Bitstr.Bit.of_string result
+      Bitstr.of_string result
 
     (* Encoding of values *)
     let int64_as_uint256 (i : int64) =
       if i < 0L then
         failwith "encode_int: cannot encode negative integer as unsigned int"
-      else Bitstr.Bit.of_bigint 256 (Z.of_int64 i)
+      else Bitstr.of_bigint 256 (Z.of_int64 i)
 
-    let int64_as_int256 (i : int64) = Bitstr.Bit.of_bigint 256 (Z.of_int64 i)
+    let int64_as_int256 (i : int64) = Bitstr.of_bigint 256 (Z.of_int64 i)
 
     let address (s : Address.t) =
       let bits = Bitstring.bitstring_of_string (s :> string) in
-      Bitstr.Bit.zero_pad_to ~dir:`left ~bits ~target_bits:(Bits.int 256)
+      Bitstr.zero_pad_to ~dir:`left ~bits ~target_bits:(Bits.int 256)
 
     let bytes_static s n =
       if String.length s < n then invalid_arg "bytes_static" ;
@@ -326,7 +326,7 @@ module ABI = struct
        *   Bitstr.(Hex.as_string (uncompress elen))
        *   Bitstr.(Hex.as_string (uncompress (zero_pad_string_to_mod32 s)))
        * ; *)
-      Bitstr.Bit.concat [elen; zero_pad_string_to_mod32 s]
+      Bitstr.concat [elen; zero_pad_string_to_mod32 s]
 
     let rec encode {typ; desc} =
       match (desc, typ) with
@@ -349,13 +349,13 @@ module ABI = struct
           let _, offsets =
             List.fold_left
               (fun (offset, acc) bitstr ->
-                let byte_len = bits_to_bytes (Bitstr.Bit.length bitstr) in
+                let byte_len = bits_to_bytes (Bitstr.length bitstr) in
                 let next_offset = Bytes.(offset + byte_len) in
                 (next_offset, offset :: acc))
               (headsz, []) tails in
           let offsets = List.rev offsets in
           let heads = List.map2 encode_heads values offsets in
-          Bitstr.Bit.concat (heads @ tails)
+          Bitstr.concat (heads @ tails)
       | _ ->
           (* TODO: static/dynamic arrays *)
           failwith "encode: error"
@@ -365,8 +365,7 @@ module ABI = struct
       else int64_as_uint256 (Int64.of_int (Bytes.to_int offset))
 
     and encode_tails (value : value) =
-      if not (SolidityTypes.is_dynamic (type_of value)) then
-        Bitstr.Bit.of_string ""
+      if not (SolidityTypes.is_dynamic (type_of value)) then Bitstr.of_string ""
       else encode value
   end
 
@@ -387,42 +386,42 @@ module ABI = struct
       | Int w -> decode_int b w
       | Address -> address_val (decode_address b)
       | Bool ->
-          let z = Bitstr.Bit.to_unsigned_bigint b in
+          let z = Bitstr.to_unsigned_bigint b in
           bool_val (Z.gt z Z.zero)
       | Fixed _ | UFixed _ ->
           failwith "decode_atomic: fixed point numbers not handled yet"
       | NBytes n ->
-          let bytes, _ = Bitstr.Bit.take_int b (n * 8) in
-          bytes_val (Bitstr.Bit.to_string bytes)
+          let bytes, _ = Bitstr.take_int b (n * 8) in
+          bytes_val (Bitstr.to_string bytes)
       | Bytes ->
-          let len, rem = Bitstr.Bit.take b (Bits.int 256) in
-          let len = Z.to_int (Bitstr.Bit.to_unsigned_bigint len) in
-          let bytes, _ = Bitstr.Bit.take rem (bytes_to_bits (Bytes.int len)) in
-          bytes_val (Bitstr.Bit.to_string bytes)
+          let len, rem = Bitstr.take b (Bits.int 256) in
+          let len = Z.to_int (Bitstr.to_unsigned_bigint len) in
+          let bytes, _ = Bitstr.take rem (bytes_to_bits (Bytes.int len)) in
+          bytes_val (Bitstr.to_string bytes)
       | String ->
-          let len, rem = Bitstr.Bit.take b (Bits.int 256) in
-          let len = Z.to_int (Bitstr.Bit.to_unsigned_bigint len) in
-          let bytes, _ = Bitstr.Bit.take rem (bytes_to_bits (Bytes.int len)) in
-          string_val (Bitstr.Bit.to_string bytes)
+          let len, rem = Bitstr.take b (Bits.int 256) in
+          let len = Z.to_int (Bitstr.to_unsigned_bigint len) in
+          let bytes, _ = Bitstr.take rem (bytes_to_bits (Bytes.int len)) in
+          string_val (Bitstr.to_string bytes)
       | Function -> decode_function b
 
     and decode_address b =
-      let addr, _ = Bitstr.Bit.take b (Bits.int 160) in
+      let addr, _ = Bitstr.take b (Bits.int 160) in
       Address.of_binary (Bitstring.string_of_bitstring addr)
 
     and decode_function b =
-      let content, _ = Bitstr.Bit.take b (Bits.int (160 + 32)) in
-      let address, selector = Bitstr.Bit.take content (Bits.int 160) in
+      let content, _ = Bitstr.take b (Bits.int (160 + 32)) in
+      let address, selector = Bitstr.take content (Bits.int 160) in
       let address = decode_address address in
-      let selector = Bitstr.Bit.to_string selector in
+      let selector = Bitstr.to_string selector in
       {desc= Func {selector; address}; typ= SolidityTypes.(Atom Function)}
 
     and decode_static_array b length t =
       static_array_val (decode_tuple b (List.init length (fun _ -> t))) t
 
     and decode_dynamic_array b t =
-      let length, _content = Bitstr.Bit.take b (Bits.int 256) in
-      let length = Z.to_int (Bitstr.Bit.to_unsigned_bigint length) in
+      let length, _content = Bitstr.take b (Bits.int 256) in
+      let length = Z.to_int (Bitstr.to_unsigned_bigint length) in
       dynamic_array_val (decode_tuple b (List.init length (fun _ -> t))) t
 
     and decode_tuple b typs =
@@ -433,13 +432,12 @@ module ABI = struct
       let _, values =
         List.fold_left
           (fun (header_chunk, values) ty ->
-            let chunk, rem = Bitstr.Bit.take header_chunk (Bits.int 256) in
+            let chunk, rem = Bitstr.take header_chunk (Bits.int 256) in
             if SolidityTypes.is_dynamic ty then
-              let offset = Bitstr.Bit.to_unsigned_bigint chunk in
+              let offset = Bitstr.to_unsigned_bigint chunk in
               let offset = Z.to_int offset in
               (* offsets are computed starting from the beginning of [b] *)
-              let _, tail =
-                Bitstr.Bit.take b (bytes_to_bits (Bytes.int offset)) in
+              let _, tail = Bitstr.take b (bytes_to_bits (Bytes.int offset)) in
               let value = decode tail ty in
               (rem, value :: values)
             else
@@ -448,16 +446,16 @@ module ABI = struct
           (b, []) typs in
       List.rev values
 
-    and decode_uint (b : Bitstr.Bit.t) w =
+    and decode_uint (b : Bitstr.t) w =
       (* Printf.eprintf "decode_uint: %s\n" (Bitstr.Hex.to_string (Bitstr.uncompress b)); *)
-      let z = Bitstr.Bit.to_unsigned_bigint b in
+      let z = Bitstr.to_unsigned_bigint b in
       if Z.fits_int64 z then
         {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint w}
       else {desc= BigInt z; typ= SolidityTypes.uint w}
 
     and decode_int b w =
       (* Printf.eprintf "decode_int: %s\n" (Bitstr.Hex.to_string (Bitstr.uncompress b)); *)
-      let z = Bitstr.Bit.to_signed_bigint b in
+      let z = Bitstr.to_signed_bigint b in
       if Z.fits_int64 z then
         {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint w}
       else {desc= BigInt z; typ= SolidityTypes.uint w}
@@ -469,7 +467,7 @@ module ABI = struct
           (fun acc abi ->
             match abi with
             | Event event_abi ->
-                let id = Bitstr.Bit.to_0x (event_id event_abi) in
+                let id = Bitstr.to_0x (event_id event_abi) in
                 (id, event_abi) :: acc
             | _ -> acc)
           [] abis in
@@ -513,7 +511,7 @@ let find_function {abi; _} name =
     (function ABI.Fun x when String.equal x.name name -> Some x | _ -> None)
     abi
 
-let hex = conv Bitstr.Bit.to_string Bitstr.Bit.of_string string
+let hex = conv Bitstr.to_string Bitstr.of_string string
 
 module X = Json_encoding.Make (Json_repr.Yojson)
 

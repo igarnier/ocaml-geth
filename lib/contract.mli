@@ -76,26 +76,26 @@ module ABI : sig
   val tuple_val : value list -> value
   val static_array_val : value list -> SolidityTypes.t -> value
   val dynamic_array_val : value list -> SolidityTypes.t -> value
-  val method_id : Fun.t -> Bitstr.Bit.t
+  val method_id : Fun.t -> Bitstr.t
   val type_of : value -> SolidityTypes.t
 
   module Encode : sig
-    val int64_as_uint256 : int64 -> Bitstr.Bit.t
-    val int64_as_int256 : int64 -> Bitstr.Bit.t
-    val address : Address.t -> Bitstr.Bit.t
-    val bytes_static : string -> int -> Bitstr.Bit.t
-    val bytes_dynamic : string -> Bitstr.Bit.t
-    val encode : value -> Bitstr.Bit.t
+    val int64_as_uint256 : int64 -> Bitstr.t
+    val int64_as_int256 : int64 -> Bitstr.t
+    val address : Address.t -> Bitstr.t
+    val bytes_static : string -> int -> Bitstr.t
+    val bytes_dynamic : string -> Bitstr.t
+    val encode : value -> Bitstr.t
   end
 
   module Decode : sig
-    val decode : Bitstr.Bit.t -> SolidityTypes.t -> value
+    val decode : Bitstr.t -> SolidityTypes.t -> value
     val decode_events : t list -> Tx.receipt -> event list
   end
 
   (**/*)
 
-  val keccak_4_bytes : string -> Bitstr.Bit.t
+  val keccak_4_bytes : string -> Bitstr.t
 end
 
 type t = {contracts: (string * contract) list; version: string}

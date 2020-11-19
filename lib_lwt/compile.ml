@@ -78,14 +78,13 @@ let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract
             arguments
             (Array.to_list constr.inputs) ;
           ABI.(Encode.encode (ABI.tuple_val arguments)) in
-    let (`Hex hex) =
-      Hex.of_string Bitstr.Bit.(concat [bin; encoded] |> to_string) in
+    let (`Hex hex) = Hex.of_string Bitstr.(concat [bin; encoded] |> to_string) in
     "0x" ^ hex in
   let rec loop c =
     match c with
     | [] -> failwith "deploy_rpc: no contracts were deployable"
     | (_name, k) :: tl -> (
-      match Bitstr.Bit.to_string k.bin with
+      match Bitstr.to_string k.bin with
       | "" -> loop tl
       | _ ->
           let data = prepare_constructor k in
@@ -110,10 +109,10 @@ let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
   else
     let method_id = ABI.method_id abi in
     Lwt_log.debug_f "calling method %s with code %s\n%!" mname
-      (Bitstr.Bit.to_0x method_id) ;%lwt
+      (Bitstr.to_0x method_id) ;%lwt
     let encoded = ABI.(Encode.encode (ABI.tuple_val arguments)) in
-    let bitstring = Bitstr.Bit.concat [method_id; encoded] in
-    let data = Bitstr.Bit.to_0x bitstring in
+    let bitstring = Bitstr.concat [method_id; encoded] in
+    let data = Bitstr.to_0x bitstring in
     let raw_transaction =
       { Types.Tx.src;
         dst= Some ctx;
@@ -131,7 +130,7 @@ let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
 let call_void_method_tx ~mname ~(src : Types.Address.t) ~(ctx : Types.Address.t)
     ?gas () =
   let method_id = ABI.keccak_4_bytes mname in
-  let data = Bitstr.Bit.to_0x method_id in
+  let data = Bitstr.to_0x method_id in
   let tx =
     { Types.Tx.src;
       dst= Some ctx;
