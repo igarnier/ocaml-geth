@@ -101,4 +101,5 @@ type t = {contracts: (string * contract) list; version: string}
 and contract = {abi: ABI.t list; bin: Bitstring.t}
 
 val find_function : contract -> string -> ABI.Fun.t option
-val encoding : t Json_encoding.encoding
+val simple : contract Json_encoding.encoding
+val combined : t Json_encoding.encoding

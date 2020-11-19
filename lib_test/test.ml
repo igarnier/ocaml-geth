@@ -79,6 +79,22 @@ let compile fn () = ignore (Compile.to_json ~filename:fn)
 let contracts = ["helloworld.sol"]
 let compile = List.map (fun s -> (s, `Quick, compile s)) contracts
 
+let jsons =
+  [ "IERC20.json"; "IUniswapV2Callee.json"; "IUniswapV2ERC20.json";
+    "IUniswapV2Factory.json"; "IUniswapV2Pair.json" ]
+
+module X = Json_encoding.Make (Json_repr.Yojson)
+
+let ofJson fn () =
+  let json = Yojson.Safe.from_file fn in
+  try ignore (X.destruct Contract.simple json)
+  with Json_encoding.Cannot_destruct (_path, exn) ->
+    Format.kasprintf failwith "%a"
+      (Json_encoding.print_error ?print_unknown:None)
+      exn
+
+let ofJson = List.map (fun s -> (s, `Quick, ofJson s)) jsons
+
 let parse_tests =
   [ "int"; "uint"; "int32"; "uint32"; "address"; "bool"; "fixed"; "fixed12x12";
     "ufixed12x12"; "string"; "function"; "int[]"; "(int,int)" ]
@@ -88,4 +104,7 @@ let roundtrip s =
   check string s s roundtrip
 
 let parse = [("basic", `Quick, fun () -> List.iter roundtrip parse_tests)]
-let () = Alcotest.run "geth" [("parser", parse); ("compile", compile)]
+
+let () =
+  Alcotest.run "geth"
+    [("parser", parse); ("compile", compile); ("ofJson", ofJson)]

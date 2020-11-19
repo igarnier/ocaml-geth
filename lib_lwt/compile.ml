@@ -47,7 +47,7 @@ let to_json ~filename =
       [|"solc"; "--optimize"; "--combined-json"; "abi,bin,interface"; filename|]
   in
   let result = Yojson.Safe.from_string raw_jsn in
-  try X.destruct Contract.encoding result
+  try X.destruct Contract.combined result
   with Json_encoding.Cannot_destruct (_path, exn) ->
     Format.kasprintf failwith "%a"
       (Json_encoding.print_error ?print_unknown:None)
