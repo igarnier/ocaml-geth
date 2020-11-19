@@ -1,10 +1,7 @@
 open Basic
 
 module Hex : sig
-  type t = private string
-
-  include Sigs.Showable with type t := t
-  include Sigs.Equalable with type t := t
+  type t = private string [@@deriving eq, show]
 
   val is_hex : string -> bool
   val of_int : int -> t
@@ -18,12 +15,10 @@ module Hex : sig
 end
 
 module Bit : sig
-  type t = Bitstring.bitstring
+  type t = Bitstring.bitstring [@@deriving eq]
   type pad_direction = [`left | `right]
 
-  include Sigs.Showable with type t := t
-  include Sigs.Equalable with type t := t
-
+  val pp : Format.formatter -> t -> unit
   val of_char : char -> t
   val of_int64 : int64 -> t
   val of_string : string -> t

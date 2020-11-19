@@ -1,42 +1,32 @@
-open Sigs
-
 (** An Ethereum address corresponding to a private key k_r is the
     rightmost truncation to 160 bit of a 256 bit Keccak hash
     of the corresponding ECDSA public key. Cf Yellow Paper. *)
 
 (** Addresses are 20 bytes long, 40 bytes in hex form + 0x. *)
 module Address : sig
-  type t = Bitstr.Hex.t
-
-  include Equalable with type t := t
-  include Showable with type t := t
+  type t = Bitstr.Hex.t [@@deriving eq, show]
 
   val from_string : string -> t
 end
 
 (** hash256 are 32 bytes long, 64 bytes in hex form + 0x. *)
 module Hash256 : sig
-  type t = Bitstr.Hex.t
-
-  include Equalable with type t := t
-  include Showable with type t := t
+  type t = Bitstr.Hex.t [@@deriving eq, show]
 
   val from_string : string -> t
 end
 
 (** hash512 are 64 bytes long, 128 bytes in hex form + 0x. *)
 module Hash512 : sig
-  type t = Bitstr.Hex.t
-
-  include Equalable with type t := t
-  include Showable with type t := t
+  type t = Bitstr.Hex.t [@@deriving eq, show]
 
   val from_string : string -> t
 end
 
 module Z : sig
   include module type of Z with type t = Z.t
-  include Showable with type t := t
+
+  val show : t -> string
 end
 
 (** 10^18 Wei = 1 Ether. TODO: currently unused. *)
