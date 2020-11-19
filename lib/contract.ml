@@ -477,8 +477,8 @@ module ABI = struct
           [] abis in
       List.fold_left
         (fun acc log ->
-          let topics = log.log_topics in
-          let data = log.log_data in
+          let topics = log.Log.topics in
+          let data = log.data in
           (* Check whether /at most one/ topic corresponds to an event *)
           let relevant =
             List.filter (fun hash -> List.mem_assoc hash codes) topics in

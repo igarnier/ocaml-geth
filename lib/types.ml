@@ -49,6 +49,45 @@ let assoc key fields =
     failwith (Printf.sprintf "assoc: key %s not found in %s" key json)
 
 module Tx = struct
+  module Log = struct
+    type t =
+      { address: Address.t;
+        topics: Hash256.t list;
+        data: string;
+        blkNum: int;
+        txHash: Hash256.t;
+        txIdx: int;
+        blkHash: Hash256.t;
+        index: int;
+        removed: bool }
+    [@@deriving show]
+
+    let of_json json =
+      match json with
+      | `Assoc fields ->
+          let table = CCHashtbl.of_list fields in
+          let find = Hashtbl.find table in
+          let address =
+            find "address" |> Json.drop_string |> Address.from_string in
+          let topics =
+            find "topics" |> Json.drop_list
+            |> List.map (Hash256.from_string % Json.drop_string) in
+          let data = find "data" |> Json.drop_string in
+          let blkNum = find "blockNumber" |> Json.drop_int_as_string in
+          let txHash =
+            find "transactionHash" |> Json.drop_string |> Hash256.from_string
+          in
+          let txIdx = find "transactionIndex" |> Json.drop_int_as_string in
+          let blkHash =
+            find "blockHash" |> Json.drop_string |> Hash256.from_string in
+          let index = find "logIndex" |> Json.drop_int_as_string in
+          let removed = find "removed" |> Json.drop_bool in
+          {address; topics; data; blkNum; txHash; txIdx; blkHash; index; removed}
+      | _ ->
+          let s = Yojson.Safe.to_string json in
+          failwith ("Types.log_from_json: unexpected json: " ^ s)
+  end
+
   type t =
     { src: Address.t;
       dst: Address.t option;
@@ -73,25 +112,12 @@ module Tx = struct
       gas_used: Z.t;
       src: Address.t;
       dst: Address.t option;
-      logs: log list;
+      logs: Log.t list;
       (* unused:
        * logs_bloom : string;
        * root : string; *)
       transaction_hash: Hash256.t;
       transaction_index: int }
-  [@@deriving show]
-
-  and log =
-    { log_address: Address.t;
-      log_topics: Hash256.t list;
-      log_data: string;
-      (* hex_string *)
-      log_block_number: int;
-      log_transaction_hash: Hash256.t;
-      log_transaction_index: int;
-      log_block_hash: Hash256.t;
-      log_index: int;
-      log_removed: bool }
   [@@deriving show]
 
   let to_json (tx : t) =
@@ -137,40 +163,6 @@ module Tx = struct
       tx_hash= txhash;
       tx_index= txindx }
 
-  let log_from_json json =
-    match json with
-    | `Assoc fields ->
-        let table = CCHashtbl.of_list fields in
-        let find = Hashtbl.find table in
-        let log_address =
-          find "address" |> Json.drop_string |> Address.from_string in
-        let log_topics =
-          find "topics" |> Json.drop_list
-          |> List.map (Hash256.from_string % Json.drop_string) in
-        let log_data = find "data" |> Json.drop_string in
-        let log_block_number = find "blockNumber" |> Json.drop_int_as_string in
-        let log_transaction_hash =
-          find "transactionHash" |> Json.drop_string |> Hash256.from_string
-        in
-        let log_transaction_index =
-          find "transactionIndex" |> Json.drop_int_as_string in
-        let log_block_hash =
-          find "blockHash" |> Json.drop_string |> Hash256.from_string in
-        let log_index = find "logIndex" |> Json.drop_int_as_string in
-        let log_removed = find "removed" |> Json.drop_bool in
-        { log_address;
-          log_topics;
-          log_data;
-          log_block_number;
-          log_transaction_hash;
-          log_transaction_index;
-          log_block_hash;
-          log_index;
-          log_removed }
-    | _ ->
-        let s = Yojson.Safe.to_string json in
-        failwith ("Types.log_from_json: unexpected json: " ^ s)
-
   let receipt_from_json j =
     match j with
     | `Null -> None
@@ -196,7 +188,7 @@ module Tx = struct
           | `Null -> None
           | _ -> failwith "Types.receipt_from_json: unexpected result" in
         let logs =
-          assoc "logs" fields |> Json.drop_list |> List.map log_from_json in
+          assoc "logs" fields |> Json.drop_list |> List.map Log.of_json in
         let transaction_hash =
           assoc "transactionHash" fields
           |> Json.drop_string |> Hash256.from_string in

@@ -36,6 +36,19 @@ type block_id = int
 
 (** Transactions *)
 module Tx : sig
+  module Log : sig
+    type t =
+      { address: Address.t;
+        topics: Hash256.t list;
+        data: string;
+        blkNum: int;
+        txHash: Hash256.t;
+        txIdx: int;
+        blkHash: Hash256.t;
+        index: int;
+        removed: bool }
+  end
+
   type t =
     { src: Address.t;
       dst: Address.t option;
@@ -60,24 +73,12 @@ module Tx : sig
       gas_used: Z.t;
       src: Address.t;
       dst: Address.t option;
-      logs: log list;
+      logs: Log.t list;
       (* unused:
        * logs_bloom : string;
        * root : string; *)
       transaction_hash: Hash256.t;
       transaction_index: int }
-
-  and log =
-    { log_address: Address.t;
-      log_topics: Hash256.t list;
-      log_data: string;
-      (* hex_string *)
-      log_block_number: int;
-      log_transaction_hash: Hash256.t;
-      log_transaction_index: int;
-      log_block_hash: Hash256.t;
-      log_index: int;
-      log_removed: bool }
 
   val accepted_from_json : Yojson.Safe.t -> accepted
   val to_json : t -> Yojson.Safe.t
