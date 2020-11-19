@@ -1,4 +1,5 @@
 open CCFun
+open Json_encoding
 
 module type LEN = sig
   val length : int
@@ -10,6 +11,7 @@ module type BINARY = sig
   val of_0x : string -> t
   val of_hex : Hex.t -> t
   val of_binary : ?pos:int -> string -> t
+  val encoding : t Json_encoding.encoding
 end
 
 module Binary (X : LEN) = struct
@@ -24,6 +26,7 @@ module Binary (X : LEN) = struct
     "0x" ^ x
 
   let pp ppf x = Format.pp_print_string ppf (show x)
+  let encoding = conv show of_0x string
 end
 
 module Address = Binary (struct let length = 20 end)
@@ -47,41 +50,76 @@ let assoc key fields =
     let json = Yojson.Safe.to_string (`Assoc fields) in
     failwith (Printf.sprintf "assoc: key %s not found in %s" key json)
 
+let inth = conv (fun i -> Printf.sprintf "0x%x" i) int_of_string string
+
+let hex =
+  conv
+    (fun v -> "0x" ^ Hex.(show (of_string v)))
+    (fun s ->
+      let len = String.length s in
+      Hex.to_string (`Hex (String.sub s 2 (len - 2))))
+    string
+
 module Tx = struct
   module Log = struct
     type t =
-      { address: Address.t;
-        topics: Hash256.t list;
-        data: string;
-        blkNum: int;
-        txHash: Hash256.t;
-        txIdx: int;
+      { blkNum: int;
         blkHash: Hash256.t;
-        index: int;
+        txIdx: int;
+        txHash: Hash256.t;
+        logIdx: int;
+        address: Address.t;
+        topics: Hash256.t array;
+        data: string;
         removed: bool }
     [@@deriving show]
 
-    let of_json json =
-      match json with
-      | `Assoc fields ->
-          let table = CCHashtbl.of_list fields in
-          let find = Hashtbl.find table in
-          let address = find "address" |> Json.drop_string |> Address.of_0x in
-          let topics =
-            find "topics" |> Json.drop_list
-            |> List.map (Hash256.of_0x % Json.drop_string) in
-          let data = find "data" |> Json.drop_string in
-          let blkNum = find "blockNumber" |> Json.drop_int_as_string in
-          let txHash =
-            find "transactionHash" |> Json.drop_string |> Hash256.of_0x in
-          let txIdx = find "transactionIndex" |> Json.drop_int_as_string in
-          let blkHash = find "blockHash" |> Json.drop_string |> Hash256.of_0x in
-          let index = find "logIndex" |> Json.drop_int_as_string in
-          let removed = find "removed" |> Json.drop_bool in
-          {address; topics; data; blkNum; txHash; txIdx; blkHash; index; removed}
-      | _ ->
-          let s = Yojson.Safe.to_string json in
-          failwith ("Types.log_from_json: unexpected json: " ^ s)
+    let encoding =
+      conv
+        (fun { blkNum;
+               blkHash;
+               txIdx;
+               txHash;
+               logIdx;
+               address;
+               topics;
+               data;
+               removed } ->
+          ( blkNum,
+            blkHash,
+            txIdx,
+            txHash,
+            logIdx,
+            address,
+            topics,
+            data,
+            removed ))
+        (fun ( blkNum,
+               blkHash,
+               txIdx,
+               txHash,
+               logIdx,
+               address,
+               topics,
+               data,
+               removed ) ->
+          { blkNum;
+            blkHash;
+            txIdx;
+            txHash;
+            logIdx;
+            address;
+            topics;
+            data;
+            removed })
+        (obj9 (req "blockNumber" inth)
+           (req "blockHash" Hash256.encoding)
+           (req "transactionIndex" inth)
+           (req "transactionHash" Hash256.encoding)
+           (req "logIndex" inth)
+           (req "address" Address.encoding)
+           (req "topics" (array Hash256.encoding))
+           (req "data" hex) (req "removed" bool))
   end
 
   type t =
@@ -181,8 +219,7 @@ module Tx = struct
           | `String addr -> Some (Address.of_0x addr)
           | `Null -> None
           | _ -> failwith "Types.receipt_from_json: unexpected result" in
-        let logs =
-          assoc "logs" fields |> Json.drop_list |> List.map Log.of_json in
+        let logs = [] (* FIXME *) in
         let transaction_hash =
           assoc "transactionHash" fields |> Json.drop_string |> Hash256.of_0x
         in

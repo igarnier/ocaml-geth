@@ -479,7 +479,7 @@ module ABI = struct
           let relevant =
             List.filter
               (fun hash -> List.mem_assoc hash codes)
-              (topics :> string list) in
+              (Array.to_list topics :> string list) in
           let event =
             match relevant with
             | [] | _ :: _ :: _ ->

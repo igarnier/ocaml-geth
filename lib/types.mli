@@ -8,6 +8,7 @@ module type BINARY = sig
   val of_0x : string -> t
   val of_hex : Hex.t -> t
   val of_binary : ?pos:int -> string -> t
+  val encoding : t Json_encoding.encoding
 end
 
 (** Addresses are 20 bytes long, 40 bytes in hex form + 0x. *)
@@ -34,15 +35,18 @@ type block_id = int
 module Tx : sig
   module Log : sig
     type t =
-      { address: Address.t;
-        topics: Hash256.t list;
-        data: string;
-        blkNum: int;
-        txHash: Hash256.t;
-        txIdx: int;
+      { blkNum: int;
         blkHash: Hash256.t;
-        index: int;
+        txIdx: int;
+        txHash: Hash256.t;
+        logIdx: int;
+        address: Address.t;
+        topics: Hash256.t array;
+        data: string;
         removed: bool }
+    [@@deriving show]
+
+    val encoding : t Json_encoding.encoding
   end
 
   type t =
