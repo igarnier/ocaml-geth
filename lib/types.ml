@@ -40,10 +40,6 @@ module Z = struct
   let pp = pp_print
 end
 
-type wei = int (* Z.t ? *)
-
-type block_id = int (* Z.t ? *)
-
 let assoc key fields =
   try List.assoc key fields
   with Not_found ->

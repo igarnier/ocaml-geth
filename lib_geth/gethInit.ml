@@ -10,17 +10,17 @@ module Genesis = struct
   type config =
     { chain_id: int;
       (* block from which the protocol will be "homestead" *)
-      homestead_block: block_id;
+      homestead_block: int;
       (* https://github.com/ethereum/EIPs/issues/155 *)
-      eip155_block: block_id;
+      eip155_block: int;
       (* https://github.com/ethereum/EIPs/issues/158 *)
-      eip158_block: block_id
+      eip158_block: int
           (* ... there are probably other such ad-hoc parameters, cf the DAO *)
     }
 
   type t =
     { config: config;  (** Protocol options. *)
-      alloc: (Address.t * wei) list;
+      alloc: (Address.t * int) list;
           (** List of accounts with pre-allocated money.  *)
       coinbase: Address.t;
           (** The 160-bit address to which all rewards (in Ether) collected from the

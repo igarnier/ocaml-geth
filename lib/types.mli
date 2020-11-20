@@ -26,11 +26,6 @@ module Z : sig
   val show : t -> string
 end
 
-(** 10^18 Wei = 1 Ether. TODO: currently unused. *)
-type wei = int
-
-type block_id = int
-
 (** Transactions *)
 module Tx : sig
   module Log : sig

@@ -2,14 +2,11 @@ open Geth
 
 module Genesis : sig
   type config =
-    { chain_id: int;
-      homestead_block: Types.block_id;
-      eip155_block: Types.block_id;
-      eip158_block: Types.block_id }
+    {chain_id: int; homestead_block: int; eip155_block: int; eip158_block: int}
 
   type t =
     { config: config;
-      alloc: (Types.Address.t * Types.wei) list;
+      alloc: (Types.Address.t * int) list;
       coinbase: Types.Address.t;
       difficulty: int;
       extra_data: string;
