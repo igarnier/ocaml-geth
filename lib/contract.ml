@@ -1,5 +1,4 @@
 open Types
-open Basic
 
 (* https://solidity.readthedocs.io/en/develop/abi-spec.html *)
 
@@ -285,9 +284,7 @@ module ABI = struct
     | _ -> 32
 
   let header_size typs =
-    let sum =
-      List.fold_left (fun acc typ -> acc + header_size_of_type typ) 0 typs in
-    Bytes.int sum
+    List.fold_left (fun acc typ -> acc + header_size_of_type typ) 0 typs
 
   module Encode = struct
     let zero_pad_string_to_mod32 s =
@@ -312,7 +309,7 @@ module ABI = struct
 
     let address (s : Address.t) =
       let bits = Bitstring.bitstring_of_string (s :> string) in
-      Bitstr.zero_pad_to ~dir:`left ~bits ~target_bits:(Bits.int 256)
+      Bitstr.zero_pad_to ~dir:`left ~bits ~target_bits:256
 
     let bytes_static s n =
       if String.length s < n then invalid_arg "bytes_static" ;
@@ -349,8 +346,8 @@ module ABI = struct
           let _, offsets =
             List.fold_left
               (fun (offset, acc) bitstr ->
-                let byte_len = bits_to_bytes (Bitstr.length bitstr) in
-                let next_offset = Bytes.(offset + byte_len) in
+                let byte_len = Bitstr.length bitstr / 8 in
+                let next_offset = offset + byte_len in
                 (next_offset, offset :: acc))
               (headsz, []) tails in
           let offsets = List.rev offsets in
@@ -360,9 +357,9 @@ module ABI = struct
           (* TODO: static/dynamic arrays *)
           failwith "encode: error"
 
-    and encode_heads (value : value) (offset : Bytes.t) =
+    and encode_heads (value : value) offset =
       if not (SolidityTypes.is_dynamic (type_of value)) then encode value
-      else int64_as_uint256 (Int64.of_int (Bytes.to_int offset))
+      else int64_as_uint256 (Int64.of_int offset)
 
     and encode_tails (value : value) =
       if not (SolidityTypes.is_dynamic (type_of value)) then Bitstr.of_string ""
@@ -394,24 +391,24 @@ module ABI = struct
           let bytes, _ = Bitstr.take_int b (n * 8) in
           bytes_val (Bitstr.to_string bytes)
       | Bytes ->
-          let len, rem = Bitstr.take b (Bits.int 256) in
+          let len, rem = Bitstr.take b 256 in
           let len = Z.to_int (Bitstr.to_unsigned_bigint len) in
-          let bytes, _ = Bitstr.take rem (bytes_to_bits (Bytes.int len)) in
+          let bytes, _ = Bitstr.take rem (len * 8) in
           bytes_val (Bitstr.to_string bytes)
       | String ->
-          let len, rem = Bitstr.take b (Bits.int 256) in
+          let len, rem = Bitstr.take b 256 in
           let len = Z.to_int (Bitstr.to_unsigned_bigint len) in
-          let bytes, _ = Bitstr.take rem (bytes_to_bits (Bytes.int len)) in
+          let bytes, _ = Bitstr.take rem (len * 8) in
           string_val (Bitstr.to_string bytes)
       | Function -> decode_function b
 
     and decode_address b =
-      let addr, _ = Bitstr.take b (Bits.int 160) in
+      let addr, _ = Bitstr.take b 160 in
       Address.of_binary (Bitstring.string_of_bitstring addr)
 
     and decode_function b =
-      let content, _ = Bitstr.take b (Bits.int (160 + 32)) in
-      let address, selector = Bitstr.take content (Bits.int 160) in
+      let content, _ = Bitstr.take b (160 + 32) in
+      let address, selector = Bitstr.take content 160 in
       let address = decode_address address in
       let selector = Bitstr.to_string selector in
       {desc= Func {selector; address}; typ= SolidityTypes.(Atom Function)}
@@ -420,7 +417,7 @@ module ABI = struct
       static_array_val (decode_tuple b (List.init length (fun _ -> t))) t
 
     and decode_dynamic_array b t =
-      let length, _content = Bitstr.take b (Bits.int 256) in
+      let length, _content = Bitstr.take b 256 in
       let length = Z.to_int (Bitstr.to_unsigned_bigint length) in
       dynamic_array_val (decode_tuple b (List.init length (fun _ -> t))) t
 
@@ -432,12 +429,12 @@ module ABI = struct
       let _, values =
         List.fold_left
           (fun (header_chunk, values) ty ->
-            let chunk, rem = Bitstr.take header_chunk (Bits.int 256) in
+            let chunk, rem = Bitstr.take header_chunk 256 in
             if SolidityTypes.is_dynamic ty then
               let offset = Bitstr.to_unsigned_bigint chunk in
               let offset = Z.to_int offset in
               (* offsets are computed starting from the beginning of [b] *)
-              let _, tail = Bitstr.take b (bytes_to_bits (Bytes.int offset)) in
+              let _, tail = Bitstr.take b (offset * 8) in
               let value = decode tail ty in
               (rem, value :: values)
             else
