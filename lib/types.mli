@@ -1,7 +1,3 @@
-(** An Ethereum address corresponding to a private key k_r is the
-    rightmost truncation to 160 bit of a 256 bit Keccak hash
-    of the corresponding ECDSA public key. Cf Yellow Paper. *)
-
 module type BINARY = sig
   type t = private string [@@deriving ord, eq, show]
 

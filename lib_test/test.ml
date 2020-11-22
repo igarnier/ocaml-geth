@@ -112,7 +112,7 @@ let parse_tests =
     "ufixed12x12"; "string"; "function"; "int[]"; "(int,int)" ]
 
 let roundtrip s =
-  let roundtrip = Contract.SolidityTypes.(to_string (of_string_exn s)) in
+  let roundtrip = SolidityTypes.(to_string (of_string_exn s)) in
   check string s s roundtrip
 
 let parse = [("basic", `Quick, fun () -> List.iter roundtrip parse_tests)]
