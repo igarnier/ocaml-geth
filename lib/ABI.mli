@@ -1,17 +1,8 @@
 open Types
 open Json_encoding
+module SV = SolidityValue
 
-type value = {desc: desc; typ: SolidityTypes.t}
-
-and desc =
-  | Int of Z.t
-  | Bool of bool
-  | String of string
-  | Address of Address.t
-  | Tuple of value list
-  | Func of {selector: string; address: Address.t}
-
-type event = {name: string; args: value list}
+type event = {name: string; args: SV.t list}
 type named = {name: string; t: SolidityTypes.t; indexed: bool}
 
 module Fun : sig
@@ -38,22 +29,10 @@ type t = Fun of Fun.t | Event of Evt.t
 val func : t -> Fun.t option
 val event : t -> Evt.t option
 val encoding : t encoding
-val int : int -> Z.t -> value
-val uint : int -> Z.t -> value
-val uint256 : Z.t -> value
-val string : string -> value
-val bytes : string -> value
-val bool : bool -> value
-val address : Address.t -> value
-val tuple : value list -> value
-val static_array : value list -> SolidityTypes.t -> value
-val dynamic_array : value list -> SolidityTypes.t -> value
-val method_id : Fun.t -> Bitstring.t
-val encode : value -> Bitstring.t
-val decode : Bitstring.t -> SolidityTypes.t -> value
 val event_of_log : t list -> Log.t -> event
 
 (**/*)
 
 val to_0x : Bitstring.t -> string
 val keccak_4_bytes : string -> Bitstring.t
+val method_id : Fun.t -> Bitstring.t

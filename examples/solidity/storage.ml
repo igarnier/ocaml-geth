@@ -64,7 +64,8 @@ struct
   let deploy_receipt () =
     deploy_rpc ~uri:X.uri ~account:X.account ~gas:(Z.of_int 175000)
       ~contract:solidity_output
-      ~arguments:ABI.[uint256 (Z.of_int64 0x123456L); string "This is a test"]
+      ~arguments:
+        SolidityValue.[uint256 (Z.of_int64 0x123456L); string "This is a test"]
       ()
 
   let storage_ctx_address () =
@@ -91,8 +92,9 @@ struct
     fun i ->
       storage_ctx_address ()
       >>= fun ctx ->
-      execute_method ~uri:X.uri ~abi:set_abi ~arguments:[ABI.uint256 i]
-        ~src:X.account ~ctx ~gas:(Z.of_int 99999) ()
+      execute_method ~uri:X.uri ~abi:set_abi
+        ~arguments:[SolidityValue.uint256 i] ~src:X.account ~ctx
+        ~gas:(Z.of_int 99999) ()
       >|= fun {logs; _} ->
       List.fold_left
         (fun acc log -> ABI.event_of_log contract.abi log :: acc)

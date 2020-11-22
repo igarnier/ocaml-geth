@@ -53,7 +53,8 @@ struct
         deploy_rpc ~uri:X.uri ~account:X.account ~gas:(Z.of_int 999999)
           ~contract:solidity_output
           ~arguments:
-            ABI.[uint256 initial_supply; string token_name; string token_symbol]
+            SolidityValue.
+              [uint256 initial_supply; string token_name; string token_symbol]
           ()
         >>= fun deploy_receipt ->
         match deploy_receipt.Types.Tx.contract_address with
@@ -87,7 +88,7 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:transfer_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[address dst; uint256 value]
+        ~arguments:SolidityValue.[address dst; uint256 value]
         ()
 
   (**
@@ -109,7 +110,7 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:transfer_from_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[address src; address dst; uint256 value]
+        ~arguments:SolidityValue.[address src; address dst; uint256 value]
         ()
 
   (**
@@ -130,7 +131,7 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:approve_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[address spender; uint256 value]
+        ~arguments:SolidityValue.[address spender; uint256 value]
         ()
 
   (**
@@ -152,7 +153,8 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:approve_and_call_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[address spender; uint256 value; bytes extra_data]
+        ~arguments:
+          SolidityValue.[address spender; uint256 value; bytes extra_data]
         ()
 
   (** Get balance. The account [src] must be authentitcated before calling this
@@ -185,7 +187,7 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:burn_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[uint256 value]
+        ~arguments:SolidityValue.[uint256 value]
         ()
 
   (**
@@ -206,6 +208,6 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:burn_from_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[address from; uint256 value]
+        ~arguments:SolidityValue.[address from; uint256 value]
         ()
 end

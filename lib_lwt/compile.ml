@@ -54,8 +54,8 @@ let to_json ~filename =
       (Json_encoding.print_error ?print_unknown:None)
       exn
 
-let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract
-    ~(arguments : ABI.value list) ?gas ?value () =
+let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract ~arguments
+    ?gas ?value () =
   let prepare_constructor ({abi; bin} : contract) =
     let constr =
       List.find_map
@@ -69,16 +69,16 @@ let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract
       | _ ->
           let open SolidityTypes in
           List.iter2
-            (fun v t ->
-              if not (equal v.ABI.typ t.ABI.t) then
+            (fun (v : SolidityValue.t) t ->
+              if not (equal v.t t.ABI.t) then
                 let arg_typ = t.ABI.t in
                 Format.kasprintf failwith
                   "deploy_rpc: constructor argument types do not match \
                    constructor declaration: %a vs %a"
-                  pp v.typ pp arg_typ)
+                  pp v.t pp arg_typ)
             arguments
             (Array.to_list constr.inputs) ;
-          ABI.(encode (tuple arguments)) in
+          SolidityValue.(encode (tuple arguments)) in
     ABI.to_0x Bitstring.(concat [bin; encoded]) in
   let rec loop c =
     match c with
@@ -93,7 +93,7 @@ let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract
   loop contract.contracts
 
 let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
-    ~(arguments : ABI.value list) ~(src : Types.Address.t)
+    ~(arguments : SolidityValue.t list) ~(src : Types.Address.t)
     ~(ctx : Types.Address.t) ?gas ?value () =
   let mname = abi.name in
   let inputs = abi.inputs in
@@ -110,7 +110,7 @@ let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
     let method_id = ABI.method_id abi in
     Lwt_log.debug_f "calling method %s with code %s\n%!" mname
       (ABI.to_0x method_id) ;%lwt
-    let encoded = ABI.(encode (tuple arguments)) in
+    let encoded = SolidityValue.(encode (tuple arguments)) in
     let bitstring = Bitstring.concat [method_id; encoded] in
     let data = ABI.to_0x bitstring in
     let raw_transaction =
@@ -143,12 +143,13 @@ let call_void_method_tx ~mname ~(src : Types.Address.t) ~(ctx : Types.Address.t)
   Lwt.return tx
 
 let execute_method ~(uri : string) ~(abi : ABI.Fun.t)
-    ~(arguments : ABI.value list) ~(src : Types.Address.t)
+    ~(arguments : SolidityValue.t list) ~(src : Types.Address.t)
     ~(ctx : Types.Address.t) ?gas ?value () =
   let%lwt tx = call_method_tx ~uri ~abi ~arguments ~src ~ctx ?gas ?value () in
   Rpc_lwt.Eth.send_transaction_and_get_receipt ~uri ~transaction:tx
 
-let call_method ~(uri : string) ~(abi : ABI.Fun.t) ~(arguments : ABI.value list)
-    ~(src : Types.Address.t) ~(ctx : Types.Address.t) ?gas ?value () =
+let call_method ~(uri : string) ~(abi : ABI.Fun.t)
+    ~(arguments : SolidityValue.t list) ~(src : Types.Address.t)
+    ~(ctx : Types.Address.t) ?gas ?value () =
   let%lwt tx = call_method_tx ~uri ~abi ~arguments ~src ~ctx ?gas ?value () in
   Rpc_lwt.Eth.call ~uri ~transaction:tx ~at_time:`latest

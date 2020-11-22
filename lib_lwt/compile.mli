@@ -7,7 +7,7 @@ val deploy_rpc :
   uri:string ->
   account:Types.Address.t ->
   contract:t ->
-  arguments:ABI.value list ->
+  arguments:SolidityValue.t list ->
   ?gas:Z.t ->
   ?value:Z.t ->
   unit ->
@@ -16,7 +16,7 @@ val deploy_rpc :
 val call_method_tx :
   uri:string ->
   abi:ABI.Fun.t ->
-  arguments:ABI.value list ->
+  arguments:SolidityValue.t list ->
   src:Types.Address.t ->
   ctx:Types.Address.t ->
   ?gas:Z.t ->
@@ -35,7 +35,7 @@ val call_void_method_tx :
 val execute_method :
   uri:string ->
   abi:ABI.Fun.t ->
-  arguments:ABI.value list ->
+  arguments:SolidityValue.t list ->
   src:Types.Address.t ->
   ctx:Types.Address.t ->
   ?gas:Z.t ->
@@ -46,7 +46,7 @@ val execute_method :
 val call_method :
   uri:string ->
   abi:ABI.Fun.t ->
-  arguments:ABI.value list ->
+  arguments:SolidityValue.t list ->
   src:Types.Address.t ->
   ctx:Types.Address.t ->
   ?gas:Z.t ->
