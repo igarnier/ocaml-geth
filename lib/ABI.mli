@@ -26,6 +26,8 @@ module Fun : sig
   and kind = Function | Constructor | Receive | Fallback
 
   and mutability = Pure | View | Nonpayable | Payable
+
+  val is_constructor : t -> bool
 end
 
 module Evt : sig
@@ -34,7 +36,8 @@ end
 
 type t = Fun of Fun.t | Event of Evt.t
 
-val is_constructor : Fun.t -> bool
+val func : t -> Fun.t option
+val event : t -> Evt.t option
 val encoding : t encoding
 val int256_val : int64 -> value
 val uint256_val : int64 -> value
@@ -59,7 +62,7 @@ end
 
 module Decode : sig
   val decode : Bitstr.t -> SolidityTypes.t -> value
-  val decode_events : t list -> Log.t list -> event list
+  val event_of_log : t list -> Log.t -> event
 end
 
 (**/*)

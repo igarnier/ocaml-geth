@@ -59,7 +59,8 @@ let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract
   let prepare_constructor ({abi; bin} : contract) =
     let constr =
       List.find_map
-        (function ABI.Fun x when ABI.is_constructor x -> Some x | _ -> None)
+        (function
+          | ABI.Fun x when ABI.Fun.is_constructor x -> Some x | _ -> None)
         abi
       |> Option.get in
     let encoded =

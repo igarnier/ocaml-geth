@@ -86,6 +86,8 @@ module Fun = struct
             (dft "inputs" (array named) [||])
             (dft "outputs" (array named) [||])
             (req "stateMutability" mutability)))
+
+  let is_constructor = function {kind= Constructor; _} -> true | _ -> false
 end
 
 module Evt = struct
@@ -104,7 +106,8 @@ end
 
 type t = Fun of Fun.t | Event of Evt.t
 
-let is_constructor = function {Fun.kind= Constructor; _} -> true | _ -> false
+let event = function Fun _ -> None | Event x -> Some x
+let func = function Fun x -> Some x | Event _ -> None
 
 let encoding =
   union
@@ -171,7 +174,7 @@ let header_size typs =
   List.fold_left (fun acc typ -> acc + header_size_of_type typ) 0 typs
 
 module Encode = struct
-  let zero_pad_string_to_mod32 s =
+  let pad s =
     let len = String.length s in
     let result =
       if len = 0 then String.make 32 '\000'
@@ -197,7 +200,7 @@ module Encode = struct
 
   let bytes_static s n =
     if String.length s < n then invalid_arg "bytes_static" ;
-    zero_pad_string_to_mod32 (String.sub s 0 n)
+    pad (String.sub s 0 n)
 
   let bytes_dynamic s =
     let len = String.length s in
@@ -205,9 +208,9 @@ module Encode = struct
     (* Printf.printf "debug: encoding string of length %d: encoding of length=%s, string = %s\n"
      *   len
      *   Bitstr.(Hex.as_string (uncompress elen))
-     *   Bitstr.(Hex.as_string (uncompress (zero_pad_string_to_mod32 s)))
+     *   Bitstr.(Hex.as_string (uncompress (pad s)))
      * ; *)
-    Bitstr.concat [elen; zero_pad_string_to_mod32 s]
+    Bitstr.concat [elen; pad s]
 
   let rec encode {typ; desc} =
     match (desc, typ) with
@@ -339,7 +342,7 @@ module Decode = struct
     if Z.fits_int64 z then {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint w}
     else {desc= BigInt z; typ= SolidityTypes.uint w}
 
-  let decode_events abis logs =
+  let event_of_log abis log =
     let codes =
       List.fold_left
         (fun acc abi ->
@@ -349,29 +352,27 @@ module Decode = struct
               (id, event_abi) :: acc
           | _ -> acc)
         [] abis in
-    let event_of_log log =
-      let topics = log.Log.topics in
-      let data = log.data in
-      (* Check whether /at most one/ topic corresponds to an event *)
-      let relevant =
-        List.filter
-          (fun hash -> List.mem_assoc hash codes)
-          (Array.to_list topics :> string list) in
-      let event =
-        match relevant with
-        | [] | _ :: _ :: _ ->
-            failwith "0 or > 1 matching event for topic, aborting"
-        | [hash] -> List.assoc hash codes in
-      let types = event.inputs in
-      let fields =
-        match
-          decode
-            (Bitstring.bitstring_of_string data)
-            (Tuple (List.map (fun {t; _} -> t) (Array.to_list types)))
-        with
-        | {desc= Tuple values; _} -> values
-        | exception _ -> failwith "decode_events: error while decoding"
-        | _ -> failwith "decode_events: bug found" in
-      {name= event.name; args= fields} in
-    List.fold_left (fun acc log -> event_of_log log :: acc) [] logs
+    let topics = log.Log.topics in
+    let data = log.data in
+    (* Check whether /at most one/ topic corresponds to an event *)
+    let relevant =
+      List.filter
+        (fun hash -> List.mem_assoc hash codes)
+        (Array.to_list topics :> string list) in
+    let event =
+      match relevant with
+      | [] | _ :: _ :: _ ->
+          failwith "0 or > 1 matching event for topic, aborting"
+      | [hash] -> List.assoc hash codes in
+    let types = event.inputs in
+    let fields =
+      match
+        decode
+          (Bitstring.bitstring_of_string data)
+          (Tuple (List.map (fun {t; _} -> t) (Array.to_list types)))
+      with
+      | {desc= Tuple values; _} -> values
+      | exception _ -> failwith "decode_events: error while decoding"
+      | _ -> failwith "decode_events: bug found" in
+    {name= event.name; args= fields}
 end

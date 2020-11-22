@@ -93,7 +93,10 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:set_abi ~arguments:[ABI.uint256_val i]
         ~src:X.account ~ctx ~gas:(Z.of_int 99999) ()
-      >|= fun receipt -> ABI.Decode.decode_events contract.abi receipt.logs
+      >|= fun {logs; _} ->
+      List.fold_left
+        (fun acc log -> ABI.Decode.event_of_log contract.abi log :: acc)
+        [] logs
 
   let get =
     let get_abi =
