@@ -11,39 +11,27 @@ module type BINARY = sig
   val encoding : t Json_encoding.encoding
 end
 
-(** Addresses are 20 bytes long, 40 bytes in hex form + 0x. *)
 module Address : BINARY
-
-(** hash256 are 32 bytes long, 64 bytes in hex form + 0x. *)
 module Hash256 : BINARY
-
-(** hash512 are 64 bytes long, 128 bytes in hex form + 0x. *)
 module Hash512 : BINARY
 
-module Z : sig
-  include module type of Z with type t = Z.t
+module Log : sig
+  type t =
+    { blkNum: int;
+      blkHash: Hash256.t;
+      txIdx: int;
+      txHash: Hash256.t;
+      logIdx: int;
+      address: Address.t;
+      topics: Hash256.t array;
+      data: string;
+      removed: bool }
+  [@@deriving show]
 
-  val show : t -> string
+  val encoding : t Json_encoding.encoding
 end
 
-(** Transactions *)
 module Tx : sig
-  module Log : sig
-    type t =
-      { blkNum: int;
-        blkHash: Hash256.t;
-        txIdx: int;
-        txHash: Hash256.t;
-        logIdx: int;
-        address: Address.t;
-        topics: Hash256.t array;
-        data: string;
-        removed: bool }
-    [@@deriving show]
-
-    val encoding : t Json_encoding.encoding
-  end
-
   type t =
     { src: Address.t;
       dst: Address.t option;
@@ -81,51 +69,33 @@ module Tx : sig
   val show_receipt : receipt -> string
 end
 
-(** Blocks *)
 module Block : sig
-  (** Fields, extracted from the JSON RPC doc of Geth.
-    number: QUANTITY - the block number. null when its pending block.
-    hash: DATA, 32 Bytes - hash of the block. null when its pending block.
-    parentHash: DATA, 32 Bytes - hash of the parent block.
-    nonce: DATA, 8 Bytes - hash of the generated proof-of-work. null when its pending block.
-    sha3Uncles: DATA, 32 Bytes - SHA3 of the uncles data in the block.
-    logsBloom: DATA, 256 Bytes - the bloom filter for the logs of the block. null when its pending block.
-    transactionsRoot: DATA, 32 Bytes - the root of the transaction trie of the block.
-    stateRoot: DATA, 32 Bytes - the root of the final state trie of the block.
-    receiptsRoot: DATA, 32 Bytes - the root of the receipts trie of the block.
-    miner: DATA, 20 Bytes - the address of the beneficiary to whom the mining rewards were given.
-    difficulty: QUANTITY - integer of the difficulty for this block.
-    totalDifficulty: QUANTITY - integer of the total difficulty of the chain until this block.
-    extraData: DATA - the "extra data" field of this block.
-    size: QUANTITY - integer the size of this block in bytes.
-    gasLimit: QUANTITY - the maximum gas allowed in this block.
-    gasUsed: QUANTITY - the total used gas by all transactions in this block.
-    timestamp: QUANTITY - the unix timestamp for when the block was collated.
-    transactions: Array - Array of transaction objects, or 32 Bytes transaction hashes depending on the last given parameter.
-    uncles: Array - Array of uncle hashes.
-  *)
   type t =
-    { number: int option;
+    { num: int option;
       hash: Hash256.t option;
-      parent_hash: Hash256.t;
-      nonce: int option;
-      sha3_uncles: Hash256.t;
-      logs_bloom: string option;
-      transactions_root: Hash256.t;
-      state_root: Hash256.t;
-      receipts_root: Hash256.t;
+      mixHash: Hash256.t option;
+      pHash: Hash256.t;
+      nonce: int64 option;
+      sha3Uncles: Hash256.t option;
+      bloom: string;
+      txRoot: Hash256.t;
+      stateRoot: Hash256.t;
+      receiptsRoot: Hash256.t;
+      (* *)
       miner: Address.t;
-      difficulty: Z.t;
-      total_difficulty: Z.t;
-      extra_data: string;
-      size: Z.t;
-      gas_limit: Z.t;
-      gas_used: Z.t;
-      timestamp: Z.t;
-      transactions: Tx.accepted list;
-      uncles: Hash256.t list }
+      diff: Z.t;
+      totalDiff: Z.t option;
+      data: string;
+      size: int;
+      gasLimit: int64;
+      gasUsed: int64;
+      timestamp: int64;
+      txs: Tx.accepted array;
+      txHashes: Hash256.t array;
+      uncles: Hash256.t array }
+  [@@deriving show]
 
-  val from_json : Yojson.Safe.t -> t
+  val encoding : t Json_encoding.encoding
 end
 
 type port_info = {discovery: int; listener: int}

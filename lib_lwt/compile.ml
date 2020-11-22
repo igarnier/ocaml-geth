@@ -1,3 +1,4 @@
+module Rpc_lwt = Rpc
 open Geth
 open Contract
 
@@ -88,7 +89,7 @@ let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract
       | "" -> loop tl
       | _ ->
           let data = prepare_constructor k in
-          Rpc.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ?gas
+          Rpc_lwt.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ?gas
             ?value () ) in
   loop contract.contracts
 
@@ -124,7 +125,8 @@ let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
     match gas with
     | Some _ -> Lwt.return {raw_transaction with gas}
     | None ->
-        let%lwt gas = Rpc.Eth.estimate_gas ~uri ~transaction:raw_transaction in
+        let%lwt gas =
+          Rpc_lwt.Eth.estimate_gas ~uri ~transaction:raw_transaction in
         Lwt.return {raw_transaction with gas= Some gas}
 
 let call_void_method_tx ~mname ~(src : Types.Address.t) ~(ctx : Types.Address.t)
@@ -145,9 +147,9 @@ let execute_method ~(uri : string) ~(abi : ABI.Fun.t)
     ~(arguments : ABI.value list) ~(src : Types.Address.t)
     ~(ctx : Types.Address.t) ?gas ?value () =
   let%lwt tx = call_method_tx ~uri ~abi ~arguments ~src ~ctx ?gas ?value () in
-  Rpc.Eth.send_transaction_and_get_receipt ~uri ~transaction:tx
+  Rpc_lwt.Eth.send_transaction_and_get_receipt ~uri ~transaction:tx
 
 let call_method ~(uri : string) ~(abi : ABI.Fun.t) ~(arguments : ABI.value list)
     ~(src : Types.Address.t) ~(ctx : Types.Address.t) ?gas ?value () =
   let%lwt tx = call_method_tx ~uri ~abi ~arguments ~src ~ctx ?gas ?value () in
-  Rpc.Eth.call ~uri ~transaction:tx ~at_time:`latest
+  Rpc_lwt.Eth.call ~uri ~transaction:tx ~at_time:`latest

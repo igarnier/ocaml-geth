@@ -33,20 +33,15 @@ module Address = Binary (struct let length = 20 end)
 module Hash256 = Binary (struct let length = 32 end)
 module Hash512 = Binary (struct let length = 64 end)
 
-module Z = struct
-  include Z
-
-  let show = to_string
-  let pp = pp_print
-end
-
 let assoc key fields =
   try List.assoc key fields
   with Not_found ->
     let json = Yojson.Safe.to_string (`Assoc fields) in
     failwith (Printf.sprintf "assoc: key %s not found in %s" key json)
 
-let inth = conv (fun i -> Printf.sprintf "0x%x" i) int_of_string string
+let inth = conv (Printf.sprintf "%#x") int_of_string string
+let inth64 = conv (Printf.sprintf "%#Lx") Int64.of_string string
+let z = conv (Z.format "%#x") Z.of_string string
 
 let hex =
   conv
@@ -56,76 +51,61 @@ let hex =
       Hex.to_string (`Hex (String.sub s 2 (len - 2))))
     string
 
+module Log = struct
+  type t =
+    { blkNum: int;
+      blkHash: Hash256.t;
+      txIdx: int;
+      txHash: Hash256.t;
+      logIdx: int;
+      address: Address.t;
+      topics: Hash256.t array;
+      data: (string[@opaque]);
+      removed: bool }
+  [@@deriving show]
+
+  let encoding =
+    conv
+      (fun { blkNum;
+             blkHash;
+             txIdx;
+             txHash;
+             logIdx;
+             address;
+             topics;
+             data;
+             removed } ->
+        (blkNum, blkHash, txIdx, txHash, logIdx, address, topics, data, removed))
+      (fun ( blkNum,
+             blkHash,
+             txIdx,
+             txHash,
+             logIdx,
+             address,
+             topics,
+             data,
+             removed ) ->
+        {blkNum; blkHash; txIdx; txHash; logIdx; address; topics; data; removed})
+      (obj9 (req "blockNumber" inth)
+         (req "blockHash" Hash256.encoding)
+         (req "transactionIndex" inth)
+         (req "transactionHash" Hash256.encoding)
+         (req "logIndex" inth)
+         (req "address" Address.encoding)
+         (req "topics" (array Hash256.encoding))
+         (req "data" hex) (req "removed" bool))
+end
+
 module Tx = struct
-  module Log = struct
-    type t =
-      { blkNum: int;
-        blkHash: Hash256.t;
-        txIdx: int;
-        txHash: Hash256.t;
-        logIdx: int;
-        address: Address.t;
-        topics: Hash256.t array;
-        data: string;
-        removed: bool }
-    [@@deriving show]
-
-    let encoding =
-      conv
-        (fun { blkNum;
-               blkHash;
-               txIdx;
-               txHash;
-               logIdx;
-               address;
-               topics;
-               data;
-               removed } ->
-          ( blkNum,
-            blkHash,
-            txIdx,
-            txHash,
-            logIdx,
-            address,
-            topics,
-            data,
-            removed ))
-        (fun ( blkNum,
-               blkHash,
-               txIdx,
-               txHash,
-               logIdx,
-               address,
-               topics,
-               data,
-               removed ) ->
-          { blkNum;
-            blkHash;
-            txIdx;
-            txHash;
-            logIdx;
-            address;
-            topics;
-            data;
-            removed })
-        (obj9 (req "blockNumber" inth)
-           (req "blockHash" Hash256.encoding)
-           (req "transactionIndex" inth)
-           (req "transactionHash" Hash256.encoding)
-           (req "logIndex" inth)
-           (req "address" Address.encoding)
-           (req "topics" (array Hash256.encoding))
-           (req "data" hex) (req "removed" bool))
-  end
-
   type t =
     { src: Address.t;
       dst: Address.t option;
-      gas: Z.t option;
-      gas_price: Z.t option;
-      value: Z.t option;
+      gas: (Z.t option[@opaque]);
+      gas_price: (Z.t option[@opaque]);
+      value: (Z.t option[@opaque]);
       data: string;
       nonce: int option }
+  [@@deriving show]
 
   type accepted =
     { tx: t;
@@ -133,13 +113,14 @@ module Tx = struct
       block_number: int;
       tx_hash: Hash256.t;
       tx_index: int }
+  [@@deriving show]
 
   type receipt =
     { block_hash: Hash256.t;
       block_number: int;
       contract_address: Address.t option;
-      cumulative_gas_used: Z.t;
-      gas_used: Z.t;
+      cumulative_gas_used: (Z.t[@opaque]);
+      gas_used: (Z.t[@opaque]);
       src: Address.t;
       dst: Address.t option;
       logs: Log.t list;
@@ -239,73 +220,98 @@ end
 
 module Block = struct
   type t =
-    { number: int option;
+    { num: int option;
       hash: Hash256.t option;
-      parent_hash: Hash256.t;
-      nonce: int option;
-      sha3_uncles: Hash256.t;
-      logs_bloom: string option;
-      transactions_root: Hash256.t;
-      state_root: Hash256.t;
-      receipts_root: Hash256.t;
+      mixHash: Hash256.t option;
+      pHash: Hash256.t;
+      nonce: int64 option;
+      sha3Uncles: Hash256.t option;
+      bloom: (string[@opaque]);
+      txRoot: Hash256.t;
+      stateRoot: Hash256.t;
+      receiptsRoot: Hash256.t;
+      (* *)
       miner: Address.t;
-      difficulty: Z.t;
-      total_difficulty: Z.t;
-      extra_data: string;
-      size: Z.t;
-      gas_limit: Z.t;
-      gas_used: Z.t;
-      timestamp: Z.t;
-      transactions: Tx.accepted list;
-      uncles: Hash256.t list }
+      diff: (Z.t[@opaque]);
+      totalDiff: (Z.t option[@opaque]);
+      data: (string[@opaque]);
+      size: int;
+      gasLimit: int64;
+      gasUsed: int64;
+      timestamp: int64;
+      txs: Tx.accepted array;
+      txHashes: Hash256.t array;
+      uncles: Hash256.t array }
+  [@@deriving show]
 
-  let from_json json =
-    let fields = Json.drop_assoc json in
-    let table = CCHashtbl.of_list fields in
-    let find = Hashtbl.find table in
-    let number = find "number" |> Json.(maybe drop_int_as_string) in
-    let hash = find "hash" |> Json.(maybe (Hash256.of_0x % drop_string)) in
-    let p_hash = find "parentHash" |> Json.(Hash256.of_0x % drop_string) in
-    let nonce = find "nonce" |> Json.(maybe drop_int) in
-    let sha3unc = find "sha3Uncles" |> Json.(Hash256.of_0x % drop_string) in
-    let logsblm = find "logsBloom" |> Json.(maybe drop_string) in
-    let txs_root =
-      find "transactionsRoot" |> Json.(Hash256.of_0x % drop_string) in
-    let st_root = find "stateRoot" |> Json.(Hash256.of_0x % drop_string) in
-    let rc_root = find "receiptsRoot" |> Json.(Hash256.of_0x % drop_string) in
-    let miner = find "miner" |> Json.(Address.of_0x % drop_string) in
-    let diff = find "difficulty" |> Json.drop_bigint_as_string in
-    let totdiff = find "totalDifficulty" |> Json.drop_bigint_as_string in
-    let ex_data = find "extraData" |> Json.drop_string in
-    let size = find "size" |> Json.drop_bigint_as_string in
-    let gas_lim = find "gasLimit" |> Json.drop_bigint_as_string in
-    let gas_used = find "gasUsed" |> Json.drop_bigint_as_string in
-    let tstamp = find "timestamp" |> Json.drop_bigint_as_string in
-    let txs =
-      find "transactions" |> Json.drop_list |> List.map Tx.accepted_from_json
-    in
-    let uncles =
-      find "uncles" |> Json.drop_list
-      |> List.map Json.(Hash256.of_0x % drop_string) in
-    { number;
-      hash;
-      parent_hash= p_hash;
-      nonce;
-      sha3_uncles= sha3unc;
-      logs_bloom= logsblm;
-      transactions_root= txs_root;
-      state_root= st_root;
-      receipts_root= rc_root;
-      miner;
-      difficulty= diff;
-      total_difficulty= totdiff;
-      extra_data= ex_data;
-      size;
-      gas_limit= gas_lim;
-      gas_used;
-      timestamp= tstamp;
-      transactions= txs;
-      uncles }
+  let e1 =
+    obj10
+      (req "number" (option inth))
+      (req "hash" (option Hash256.encoding))
+      (opt "mixHash" Hash256.encoding)
+      (req "parentHash" Hash256.encoding)
+      (req "nonce" (option inth64))
+      (req "sha3Uncles" (option Hash256.encoding))
+      (dft "logsBloom" hex "")
+      (req "transactionsRoot" Hash256.encoding)
+      (req "stateRoot" Hash256.encoding)
+      (req "receiptsRoot" Hash256.encoding)
+
+  let e2 =
+    obj10
+      (req "miner" Address.encoding)
+      (req "difficulty" z)
+      (dft "totalDifficulty" (option z) None)
+      (req "extraData" hex) (dft "size" inth 0) (req "gasLimit" inth64)
+      (req "gasUsed" inth64) (req "timestamp" inth64)
+      (dft "transactions" (array Hash256.encoding) [||])
+      (dft "uncles" (array Hash256.encoding) [||])
+
+  let encoding =
+    conv
+      (fun _ -> assert false)
+      (fun ( ( num,
+               hash,
+               mixHash,
+               pHash,
+               nonce,
+               sha3Uncles,
+               bloom,
+               txRoot,
+               stateRoot,
+               receiptsRoot ),
+             ( miner,
+               diff,
+               totalDiff,
+               data,
+               size,
+               gasLimit,
+               gasUsed,
+               timestamp,
+               txs,
+               uncles ) ) ->
+        { num;
+          hash;
+          mixHash;
+          pHash;
+          nonce;
+          sha3Uncles;
+          bloom;
+          txRoot;
+          stateRoot;
+          receiptsRoot;
+          miner;
+          diff;
+          totalDiff;
+          data;
+          size;
+          gasLimit;
+          gasUsed;
+          timestamp;
+          txs= [||] (*FIXME*);
+          txHashes= txs;
+          uncles })
+      (merge_objs e1 e2)
 end
 
 type port_info = {discovery: int; listener: int}

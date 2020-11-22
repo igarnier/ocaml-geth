@@ -14,7 +14,7 @@ let poll_new_block uri state =
   >|= function
   | None -> None
   | Some block -> (
-    match block.Block.number with
+    match block.Block.num with
     | None -> failwith "block has no number!?"
     | Some n ->
         if n <> state.block_number + 1 then failwith "block number mismatch"
@@ -41,9 +41,9 @@ let rec iter_blocks period uri state f =
 
 let default_action block =
   Printf.printf "block #%s, #tx %d, tstamp %s\n%!"
-    (Option.fold ~none:"pending" ~some:string_of_int block.Block.number)
-    (List.length block.Block.transactions)
-    (Z.to_string block.Block.timestamp) ;
+    (Option.fold ~none:"pending" ~some:string_of_int block.Block.num)
+    (Array.length block.Block.txs)
+    (Int64.to_string block.Block.timestamp) ;
   Lwt.return_unit
 
 let main () =

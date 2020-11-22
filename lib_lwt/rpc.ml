@@ -196,13 +196,11 @@ module Eth = struct
 
   let get_block_by_hash ~uri ~block_hash =
     let params = `List [`String (Hash256.show block_hash)] in
-    rpc_call uri "eth_getBlockByHash" params
-    |>> Get.result |>> Json.maybe Block.from_json
+    rpc_call uri "eth_getBlockByHash" params |>> Get.result |>> assert false
 
   let get_block_by_number ~uri ~at_time =
     let params = `List [time_to_json at_time; `Bool true] in
-    rpc_call uri "eth_getBlockByNumber" params
-    |>> Get.result |>> Json.maybe Block.from_json
+    rpc_call uri "eth_getBlockByNumber" params |>> Get.result |>> assert false
 
   let sign ~uri ~address ~message =
     rpc_call uri "eth_sign"

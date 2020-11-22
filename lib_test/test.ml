@@ -104,7 +104,7 @@ let contract =
 let log =
   List.map
     (fun s ->
-      (s, `Quick, ofJson Types.Tx.Log.encoding (Yojson.Safe.from_string s)))
+      (s, `Quick, ofJson Types.Log.encoding (Yojson.Safe.from_string s)))
     logs
 
 let parse_tests =
