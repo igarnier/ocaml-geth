@@ -1,6 +1,7 @@
 open Types
+module ST = SolidityTypes
 
-type value = {desc: desc; typ: SolidityTypes.t}
+type value = {desc: desc; typ: ST.t}
 
 and desc =
   | Int of int64
@@ -15,12 +16,12 @@ type event = {name: string; args: value list}
 
 open Json_encoding
 
-type named = {name: string; t: SolidityTypes.t; indexed: bool}
+type named = {name: string; t: ST.t; indexed: bool}
 
 let of_named {t; _} = t
 
 let extended =
-  let open SolidityTypes in
+  let open ST in
   let open Angstrom in
   choice
     [ (Parser.t >>| fun x -> `Simple x); (string "tuple" >>| fun _ -> `Tup);
@@ -120,27 +121,24 @@ let encoding =
 (* Convenience functions to create ABI values *)
 
 let type_of (v : value) = v.typ
-let int256_val (v : int64) = {desc= Int v; typ= SolidityTypes.int 256}
-let uint256_val (v : int64) = {desc= Int v; typ= SolidityTypes.uint 256}
-let string_val (v : string) = {desc= String v; typ= SolidityTypes.string}
-let bytes_val (v : string) = {desc= String v; typ= SolidityTypes.bytes}
-let bool_val (v : bool) = {desc= Bool v; typ= SolidityTypes.address}
-let address_val (v : Address.t) = {desc= Address v; typ= SolidityTypes.address}
-
-let tuple_val vals =
-  {desc= Tuple vals; typ= SolidityTypes.Tuple (List.map type_of vals)}
+let int256_val (v : int64) = {desc= Int v; typ= ST.int 256}
+let uint256_val (v : int64) = {desc= Int v; typ= ST.uint 256}
+let string_val (v : string) = {desc= String v; typ= ST.string}
+let bytes_val (v : string) = {desc= String v; typ= ST.bytes}
+let bool_val (v : bool) = {desc= Bool v; typ= ST.address}
+let address_val (v : Address.t) = {desc= Address v; typ= ST.address}
+let tuple_val vals = {desc= Tuple vals; typ= ST.Tuple (List.map type_of vals)}
 
 let static_array_val vals typ =
-  {desc= Tuple vals; typ= SolidityTypes.SArray (List.length vals, typ)}
+  {desc= Tuple vals; typ= ST.SArray (List.length vals, typ)}
 
-let dynamic_array_val vals typ =
-  {desc= Tuple vals; typ= SolidityTypes.DArray typ}
+let dynamic_array_val vals typ = {desc= Tuple vals; typ= ST.DArray typ}
 
 (* -------------------------------------------------------------------------------- *)
 (* Computing function selectors *)
 
 let string_of_signature name inputs =
-  let encodings = Array.map (fun {t; _} -> SolidityTypes.to_string t) inputs in
+  let encodings = Array.map (fun {t; _} -> ST.to_string t) inputs in
   let elts = String.concat "," (Array.to_list encodings) in
   name ^ "(" ^ elts ^ ")"
 
@@ -164,10 +162,10 @@ let event_id {Evt.name; inputs; anonymous= _} =
 (* -------------------------------------------------------------------------------- *)
 
 let header_size_of_type typ =
-  let open SolidityTypes in
+  let open ST in
   match typ with
-  | SArray (length, _) when not (SolidityTypes.is_dynamic typ) -> 32 * length
-  | Tuple typs when not (SolidityTypes.is_dynamic typ) -> 32 * List.length typs
+  | SArray (length, _) when not (ST.is_dynamic typ) -> 32 * length
+  | Tuple typs when not (ST.is_dynamic typ) -> 32 * List.length typs
   | _ -> 32
 
 let header_size typs =
@@ -245,18 +243,18 @@ module Encode = struct
         failwith "encode: error"
 
   and encode_heads (value : value) offset =
-    if not (SolidityTypes.is_dynamic (type_of value)) then encode value
+    if not (ST.is_dynamic (type_of value)) then encode value
     else int64_as_uint256 (Int64.of_int offset)
 
   and encode_tails (value : value) =
-    if not (SolidityTypes.is_dynamic (type_of value)) then Bitstr.of_string ""
+    if not (ST.is_dynamic (type_of value)) then Bitstr.of_string ""
     else encode value
 end
 
 module Decode = struct
   let rec decode b t =
-    (* Printf.eprintf "decoding %s with data %s\n" (SolidityTypes.print t) (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
-    let open SolidityTypes in
+    (* Printf.eprintf "decoding %s with data %s\n" (ST.print t) (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
+    let open ST in
     match t with
     | Atom at -> decode_atomic b at
     | SArray (length, typ) -> decode_static_array b length typ
@@ -264,7 +262,7 @@ module Decode = struct
     | Tuple typs -> tuple_val (decode_tuple b typs)
 
   and decode_atomic b at =
-    (* Printf.eprintf "decoding atomic %s\n" (SolidityTypes.print (SolidityTypes.Tatomic at));       *)
+    (* Printf.eprintf "decoding atomic %s\n" (ST.print (ST.Tatomic at));       *)
     match at with
     | UInt w -> decode_uint b w
     | Int w -> decode_int b w
@@ -298,7 +296,7 @@ module Decode = struct
     let address, selector = Bitstr.take content 160 in
     let address = decode_address address in
     let selector = Bitstr.to_string selector in
-    {desc= Func {selector; address}; typ= SolidityTypes.(Atom Function)}
+    {desc= Func {selector; address}; typ= ST.(Atom Function)}
 
   and decode_static_array b length t =
     static_array_val (decode_tuple b (List.init length (fun _ -> t))) t
@@ -310,14 +308,14 @@ module Decode = struct
 
   and decode_tuple b typs =
     (* Printf.eprintf "decoding tuple %s with data = %s\n"  *)
-    (*   (SolidityTypes.print (SolidityTypes.Ttuple typs))
+    (*   (ST.print (ST.Ttuple typs))
      *   (Bitstr.Hex.to_string (Bitstr.uncompress b))
      * ; *)
     let _, values =
       List.fold_left
         (fun (header_chunk, values) ty ->
           let chunk, rem = Bitstr.take header_chunk 256 in
-          if SolidityTypes.is_dynamic ty then
+          if ST.is_dynamic ty then
             let offset = Bitstr.to_unsigned_bigint chunk in
             let offset = Z.to_int offset in
             (* offsets are computed starting from the beginning of [b] *)
@@ -333,14 +331,14 @@ module Decode = struct
   and decode_uint (b : Bitstr.t) w =
     (* Printf.eprintf "decode_uint: %s\n" (Bitstr.Hex.to_string (Bitstr.uncompress b)); *)
     let z = Bitstr.to_unsigned_bigint b in
-    if Z.fits_int64 z then {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint w}
-    else {desc= BigInt z; typ= SolidityTypes.uint w}
+    if Z.fits_int64 z then {desc= Int (Z.to_int64 z); typ= ST.uint w}
+    else {desc= BigInt z; typ= ST.uint w}
 
   and decode_int b w =
     (* Printf.eprintf "decode_int: %s\n" (Bitstr.Hex.to_string (Bitstr.uncompress b)); *)
     let z = Bitstr.to_signed_bigint b in
-    if Z.fits_int64 z then {desc= Int (Z.to_int64 z); typ= SolidityTypes.uint w}
-    else {desc= BigInt z; typ= SolidityTypes.uint w}
+    if Z.fits_int64 z then {desc= Int (Z.to_int64 z); typ= ST.uint w}
+    else {desc= BigInt z; typ= ST.uint w}
 
   let event_of_log abis log =
     let codes =
