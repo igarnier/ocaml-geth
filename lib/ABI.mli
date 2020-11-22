@@ -51,18 +51,15 @@ val dynamic_array : value list -> SolidityTypes.t -> value
 val method_id : Fun.t -> Bitstring.t
 
 module Encode : sig
-  val address : Address.t -> Bitstring.t
-  val bytes_static : string -> int -> int -> Bitstring.t
-  val bytes_dynamic : string -> Bitstring.t
   val encode : value -> Bitstring.t
 end
 
 module Decode : sig
-  val to_0x : Bitstring.t -> string
   val decode : Bitstring.t -> SolidityTypes.t -> value
   val event_of_log : t list -> Log.t -> event
 end
 
 (**/*)
 
+val to_0x : Bitstring.t -> string
 val keccak_4_bytes : string -> Bitstring.t

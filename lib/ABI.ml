@@ -172,8 +172,6 @@ module Encode = struct
     String.init 32 (fun i -> if i < 12 then '\x00' else (s :> string).[i - 12])
     |> bitstring_of_string
 
-  let bytes_static s pos len = pack `Back (String.sub s pos len)
-
   let int x =
     let%bitstring x = {|x: 31|} in
     let pad = zeroes_bitstring (256 - bitstring_length x) in
@@ -189,8 +187,6 @@ module Encode = struct
     let pad = 256 - len in
     concat [zeroes_bitstring pad; bs]
 
-  let bytes_dynamic s = Bitstring.concat [int (String.length s); pack `Back s]
-
   let rec encode {typ; desc} =
     match (desc, typ) with
     | Int v, UInt _ when Z.sign v > 0 -> z v
@@ -202,6 +198,11 @@ module Encode = struct
     | String v, String | String v, Bytes ->
         Bitstring.concat [int (String.length v); pack `Back v]
     | Tuple values, Tuple typs ->
+        let encode_heads v offset =
+          if not (ST.is_dynamic v.typ) then encode v else int offset in
+        let encode_tails v =
+          if not (ST.is_dynamic v.typ) then zeroes_bitstring 0 else encode v
+        in
         (* The types are implicitly contained in the values. *)
         (* compute size of header *)
         let headsz = header_size typs in
@@ -222,12 +223,6 @@ module Encode = struct
     | _ ->
         (* TODO: static/dynamic arrays *)
         failwith "encode: error"
-
-  and encode_heads v offset =
-    if not (ST.is_dynamic v.typ) then encode v else int offset
-
-  and encode_tails v =
-    if not (ST.is_dynamic v.typ) then zeroes_bitstring 0 else encode v
 end
 
 (* -------------------------------------------------------------------------------- *)
@@ -249,6 +244,10 @@ let static_array vals typ =
 
 let dynamic_array vals typ = {desc= Tuple vals; typ= ST.DArray typ}
 
+let to_0x b =
+  let (`Hex res) = Hex.of_string (Bitstring.string_of_bitstring b) in
+  "0x" ^ res
+
 module Decode = struct
   open Bitstring
 
@@ -261,10 +260,6 @@ module Decode = struct
   let signed b =
     string_of_bitstring b |> CCString.rev |> notstring |> Z.of_bits
     |> Z.add Z.one |> Z.neg
-
-  let to_0x b =
-    let (`Hex res) = Hex.of_string (string_of_bitstring b) in
-    "0x" ^ res
 
   let rec decode b t =
     (* Printf.eprintf "decoding %s with data %s\n" (ST.print t) (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
