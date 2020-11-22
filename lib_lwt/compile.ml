@@ -70,23 +70,21 @@ let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract
           let open SolidityTypes in
           List.iter2
             (fun v t ->
-              if not (equal (ABI.type_of v) t.ABI.t) then
-                let typeof_v = ABI.type_of v in
+              if not (equal v.ABI.typ t.ABI.t) then
                 let arg_typ = t.ABI.t in
                 Format.kasprintf failwith
                   "deploy_rpc: constructor argument types do not match \
                    constructor declaration: %a vs %a"
-                  pp typeof_v pp arg_typ)
+                  pp v.typ pp arg_typ)
             arguments
             (Array.to_list constr.inputs) ;
-          ABI.(Encode.encode (ABI.tuple_val arguments)) in
-    let (`Hex hex) = Hex.of_string Bitstr.(concat [bin; encoded] |> to_string) in
-    "0x" ^ hex in
+          ABI.(Encode.encode (ABI.tuple arguments)) in
+    ABI.Decode.to_0x Bitstring.(concat [bin; encoded]) in
   let rec loop c =
     match c with
     | [] -> failwith "deploy_rpc: no contracts were deployable"
     | (_name, k) :: tl -> (
-      match Bitstr.to_string k.bin with
+      match Bitstring.string_of_bitstring k.bin with
       | "" -> loop tl
       | _ ->
           let data = prepare_constructor k in
@@ -111,10 +109,10 @@ let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
   else
     let method_id = ABI.method_id abi in
     Lwt_log.debug_f "calling method %s with code %s\n%!" mname
-      (Bitstr.to_0x method_id) ;%lwt
-    let encoded = ABI.(Encode.encode (ABI.tuple_val arguments)) in
-    let bitstring = Bitstr.concat [method_id; encoded] in
-    let data = Bitstr.to_0x bitstring in
+      (ABI.Decode.to_0x method_id) ;%lwt
+    let encoded = ABI.(Encode.encode (ABI.tuple arguments)) in
+    let bitstring = Bitstring.concat [method_id; encoded] in
+    let data = ABI.Decode.to_0x bitstring in
     let raw_transaction =
       { Types.Tx.src;
         dst= Some ctx;
@@ -133,7 +131,7 @@ let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
 let call_void_method_tx ~mname ~(src : Types.Address.t) ~(ctx : Types.Address.t)
     ?gas () =
   let method_id = ABI.keccak_4_bytes mname in
-  let data = Bitstr.to_0x method_id in
+  let data = ABI.Decode.to_0x method_id in
   let tx =
     { Types.Tx.src;
       dst= Some ctx;

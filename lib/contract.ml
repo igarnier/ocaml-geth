@@ -9,7 +9,8 @@ let find_function {abi; _} name =
     (function ABI.Fun x when String.equal x.name name -> Some x | _ -> None)
     abi
 
-let hex = conv Bitstr.to_string Bitstr.of_string string
+let hex =
+  conv Bitstring.string_of_bitstring Bitstring.bitstring_of_string string
 
 module X = Json_encoding.Make (Json_repr.Yojson)
 

@@ -28,7 +28,7 @@ let input_password (account : Types.Address.t) =
   print_newline () ; res
 
 type mode =
-  | Create of {initial_supply: int64; token_name: string; token_symbol: string}
+  | Create of {initial_supply: Z.t; token_name: string; token_symbol: string}
   | Connect of {address: Types.Address.t}
 
 module Erc20 (X : sig
@@ -53,9 +53,7 @@ struct
         deploy_rpc ~uri:X.uri ~account:X.account ~gas:(Z.of_int 999999)
           ~contract:solidity_output
           ~arguments:
-            ABI.
-              [ uint256_val initial_supply; string_val token_name;
-                string_val token_symbol ]
+            ABI.[uint256 initial_supply; string token_name; string token_symbol]
           ()
         >>= fun deploy_receipt ->
         match deploy_receipt.Types.Tx.contract_address with
@@ -79,7 +77,7 @@ struct
    * @param _to The address of the recipient
    * @param _value the amount to send
   *)
-  let transfer : Types.Address.t -> int64 -> Types.Tx.receipt Lwt.t =
+  let transfer =
     let transfer_abi =
       match find_method "transfer" with
       | None -> failwith "transfer method not found in solidity output"
@@ -89,7 +87,7 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:transfer_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[address_val dst; uint256_val value]
+        ~arguments:ABI.[address dst; uint256 value]
         ()
 
   (**
@@ -101,8 +99,7 @@ struct
    * @param dst The address of the recipient
    * @param value the amount to send
   *)
-  let transfer_from :
-      Types.Address.t -> Types.Address.t -> int64 -> Types.Tx.receipt Lwt.t =
+  let transfer_from =
     let transfer_from_abi =
       match find_method "transferFrom" with
       | None -> failwith "transferFrom method not found in solidity output"
@@ -112,7 +109,7 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:transfer_from_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[address_val src; address_val dst; uint256_val value]
+        ~arguments:ABI.[address src; address dst; uint256 value]
         ()
 
   (**
@@ -123,7 +120,7 @@ struct
    * @param spender The address authorized to spend
    * @param value the max amount they can spend
   *)
-  let approve : Types.Address.t -> int64 -> Types.Tx.receipt Lwt.t =
+  let approve =
     let approve_abi =
       match find_method "approve" with
       | None -> failwith "approve method not found in solidity output"
@@ -133,7 +130,7 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:approve_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[address_val spender; uint256_val value]
+        ~arguments:ABI.[address spender; uint256 value]
         ()
 
   (**
@@ -145,8 +142,7 @@ struct
    * @param value the max amount they can spend
    * @param extra_data some extra information to send to the approved contract
   *)
-  let approve_and_call :
-      Types.Address.t -> int64 -> string -> Types.Tx.receipt Lwt.t =
+  let approve_and_call =
     let approve_and_call_abi =
       match find_method "approveAndCall" with
       | None -> failwith "approveAndCall method not found in solidity output"
@@ -156,13 +152,12 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:approve_and_call_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:
-          ABI.[address_val spender; uint256_val value; bytes_val extra_data]
+        ~arguments:ABI.[address spender; uint256 value; bytes extra_data]
         ()
 
   (** Get balance. The account [src] must be authentitcated before calling this
       function. *)
-  let get_balance : Types.Address.t -> string Lwt.t =
+  let get_balance =
     let get_balance_abi =
       match find_method "getBalance" with
       | None -> failwith "getBalance method not found in solidity output"
@@ -180,7 +175,7 @@ struct
    *
    * @param value the amount of money to burn
   *)
-  let burn : int64 -> Types.Tx.receipt Lwt.t =
+  let burn =
     let burn_abi =
       match find_method "burn" with
       | None -> failwith "burn method not found in solidity output"
@@ -190,7 +185,7 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:burn_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[uint256_val value]
+        ~arguments:ABI.[uint256 value]
         ()
 
   (**
@@ -201,7 +196,7 @@ struct
    * @param from the address of the sender
    * @param value the amount of money to burn
   *)
-  let burn_from : Types.Address.t -> int64 -> Types.Tx.receipt Lwt.t =
+  let burn_from =
     let burn_from_abi =
       match find_method "burnFrom" with
       | None -> failwith "burnFrom method not found in solidity output"
@@ -211,6 +206,6 @@ struct
       >>= fun ctx ->
       execute_method ~uri:X.uri ~abi:burn_from_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
-        ~arguments:ABI.[address_val from; uint256_val value]
+        ~arguments:ABI.[address from; uint256 value]
         ()
 end
