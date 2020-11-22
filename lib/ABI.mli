@@ -49,15 +49,9 @@ val tuple : value list -> value
 val static_array : value list -> SolidityTypes.t -> value
 val dynamic_array : value list -> SolidityTypes.t -> value
 val method_id : Fun.t -> Bitstring.t
-
-module Encode : sig
-  val encode : value -> Bitstring.t
-end
-
-module Decode : sig
-  val decode : Bitstring.t -> SolidityTypes.t -> value
-  val event_of_log : t list -> Log.t -> event
-end
+val encode : value -> Bitstring.t
+val decode : Bitstring.t -> SolidityTypes.t -> value
+val event_of_log : t list -> Log.t -> event
 
 (**/*)
 

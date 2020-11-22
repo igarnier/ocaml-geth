@@ -95,7 +95,7 @@ struct
         ~src:X.account ~ctx ~gas:(Z.of_int 99999) ()
       >|= fun {logs; _} ->
       List.fold_left
-        (fun acc log -> ABI.Decode.event_of_log contract.abi log :: acc)
+        (fun acc log -> ABI.event_of_log contract.abi log :: acc)
         [] logs
 
   let get =

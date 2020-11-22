@@ -78,7 +78,7 @@ let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract
                   pp v.typ pp arg_typ)
             arguments
             (Array.to_list constr.inputs) ;
-          ABI.(Encode.encode (ABI.tuple arguments)) in
+          ABI.(encode (tuple arguments)) in
     ABI.to_0x Bitstring.(concat [bin; encoded]) in
   let rec loop c =
     match c with
@@ -110,7 +110,7 @@ let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
     let method_id = ABI.method_id abi in
     Lwt_log.debug_f "calling method %s with code %s\n%!" mname
       (ABI.to_0x method_id) ;%lwt
-    let encoded = ABI.(Encode.encode (ABI.tuple arguments)) in
+    let encoded = ABI.(encode (tuple arguments)) in
     let bitstring = Bitstring.concat [method_id; encoded] in
     let data = ABI.to_0x bitstring in
     let raw_transaction =
