@@ -212,14 +212,14 @@ module Encode = struct
 
   let rec encode {typ; desc} =
     match (desc, typ) with
-    | Int v, Atom (UInt _) -> int64_as_uint256 v
-    | Int v, Atom (Int _) -> int64_as_int256 v
-    | Bool v, Atom Bool ->
+    | Int v, UInt _ -> int64_as_uint256 v
+    | Int v, Int _ -> int64_as_int256 v
+    | Bool v, Bool ->
         let i = if v then 1L else 0L in
         int64_as_uint256 i
-    | Address v, Atom Address -> address v
-    | String v, Atom (NBytes n) -> bytes_static v n
-    | String v, Atom String | String v, Atom Bytes -> bytes_dynamic v
+    | Address v, Address -> address v
+    | String v, NBytes n -> bytes_static v n
+    | String v, String | String v, Bytes -> bytes_dynamic v
     | Tuple values, Tuple typs ->
         (* The types are implicitly contained in the values. *)
         (* compute size of header *)
@@ -256,14 +256,9 @@ module Decode = struct
     (* Printf.eprintf "decoding %s with data %s\n" (ST.print t) (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
     let open ST in
     match t with
-    | Atom at -> decode_atomic b at
     | SArray (length, typ) -> decode_static_array b length typ
     | DArray typ -> decode_dynamic_array b typ
     | Tuple typs -> tuple_val (decode_tuple b typs)
-
-  and decode_atomic b at =
-    (* Printf.eprintf "decoding atomic %s\n" (ST.print (ST.Tatomic at));       *)
-    match at with
     | UInt w -> decode_uint b w
     | Int w -> decode_int b w
     | Address -> address_val (decode_address b)
@@ -296,7 +291,7 @@ module Decode = struct
     let address, selector = Bitstr.take content 160 in
     let address = decode_address address in
     let selector = Bitstr.to_string selector in
-    {desc= Func {selector; address}; typ= ST.(Atom Function)}
+    {desc= Func {selector; address}; typ= ST.Function}
 
   and decode_static_array b length t =
     static_array_val (decode_tuple b (List.init length (fun _ -> t))) t

@@ -1,4 +1,5 @@
-type atom =
+type t =
+  (* atoms *)
   | UInt of int
   | Int of int
   | Address
@@ -9,38 +10,23 @@ type atom =
   | Bytes
   | String
   | Function
-
-and t = Atom of atom | SArray of int * t | DArray of t | Tuple of t list
+  (* composite *)
+  | SArray of int * t
+  | DArray of t
+  | Tuple of t list
 [@@deriving eq]
 
-let atom x = Atom x
-let uint w = Atom (UInt w)
-let int w = Atom (Int w)
-let string = Atom String
-let bytes = Atom Bytes
-let address = Atom Address
+let uint w = UInt w
+let int w = Int w
+let string = String
+let bytes = Bytes
+let address = Address
 
 let rec is_dynamic = function
-  | Atom Bytes | Atom String | DArray _ -> true
+  | Bytes | String | DArray _ -> true
   | Tuple typs -> List.exists is_dynamic typs
   | SArray (_, typ) when is_dynamic typ -> true
   | _ -> false
-
-let string_of_atom = function
-  | UInt 256 -> "uint"
-  | Int 256 -> "int"
-  | UInt w -> "uint" ^ string_of_int w
-  | Int w -> "int" ^ string_of_int w
-  | Address -> "address"
-  | Bool -> "bool"
-  | Fixed (128, 18) -> "fixed"
-  | UFixed (128, 18) -> "ufixed"
-  | Fixed (m, n) -> "fixed" ^ string_of_int m ^ "x" ^ string_of_int n
-  | UFixed (m, n) -> "ufixed" ^ string_of_int m ^ "x" ^ string_of_int n
-  | NBytes n -> "bytes" ^ string_of_int n
-  | Bytes -> "bytes"
-  | String -> "string"
-  | Function -> "function"
 
 module Parser = struct
   open Angstrom
@@ -74,7 +60,7 @@ module Parser = struct
     >>| (fun _ -> `Dynamic)
     <|> (char '[' *> num <* char ']' >>| fun n -> `Static n)
 
-  let atm = map ~f:atom (choice [int; fixed; bytes; addr; bool; str; func])
+  let atm = choice [int; fixed; bytes; addr; bool; str; func]
 
   let tpl expr =
     char '(' *> sep_by (char ',') expr <* char ')' >>| fun x -> Tuple x
@@ -96,7 +82,22 @@ let of_string_exn s =
   match of_string s with Ok x -> x | Error err -> failwith err
 
 let rec to_string = function
-  | Atom atom -> string_of_atom atom
+  (* atoms *)
+  | UInt 256 -> "uint"
+  | Int 256 -> "int"
+  | UInt w -> "uint" ^ string_of_int w
+  | Int w -> "int" ^ string_of_int w
+  | Address -> "address"
+  | Bool -> "bool"
+  | Fixed (128, 18) -> "fixed"
+  | UFixed (128, 18) -> "ufixed"
+  | Fixed (m, n) -> "fixed" ^ string_of_int m ^ "x" ^ string_of_int n
+  | UFixed (m, n) -> "ufixed" ^ string_of_int m ^ "x" ^ string_of_int n
+  | NBytes n -> "bytes" ^ string_of_int n
+  | Bytes -> "bytes"
+  | String -> "string"
+  | Function -> "function"
+  (* composite *)
   | SArray (length, typ) -> to_string typ ^ "[" ^ string_of_int length ^ "]"
   | DArray typ -> to_string typ ^ "[]"
   | Tuple types -> "(" ^ String.concat "," (List.map to_string types) ^ ")"

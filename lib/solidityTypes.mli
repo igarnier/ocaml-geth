@@ -1,4 +1,5 @@
-type atom =
+type t =
+  (* atoms *)
   | UInt of int
   | Int of int
   | Address
@@ -9,10 +10,12 @@ type atom =
   | Bytes
   | String
   | Function
+  (* composite *)
+  | SArray of int * t
+  | DArray of t
+  | Tuple of t list
+[@@deriving eq]
 
-and t = Atom of atom | SArray of int * t | DArray of t | Tuple of t list
-
-val equal : t -> t -> bool
 val of_string : string -> (t, string) result
 val of_string_exn : string -> t
 val to_string : t -> string
