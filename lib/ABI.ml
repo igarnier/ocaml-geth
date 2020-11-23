@@ -29,9 +29,9 @@ let named x =
     | `Simple t -> {name; t; indexed}
     | `Tup -> {name; t= Tuple (List.map of_named components); indexed}
     | `Tups None ->
-        {name; t= DArray (Tuple (List.map of_named components)); indexed}
+        {name; t= VArray (Tuple (List.map of_named components)); indexed}
     | `Tups (Some n) ->
-        {name; t= SArray (n, Tuple (List.map of_named components)); indexed}
+        {name; t= FArray (n, Tuple (List.map of_named components)); indexed}
   in
   conv
     (function _ -> assert false)
@@ -160,7 +160,7 @@ let event_of_log abis log =
   let types = Array.to_list event.inputs in
   let ty = ST.Tuple (List.map (fun {t; _} -> t) types) in
   let fields =
-    match SV.decode (Bitstring.bitstring_of_string data) ty with
+    match SV.decode ty (Bitstring.bitstring_of_string data) with
     | {v= SV.Tuple values; _} -> values
     | exception _ -> failwith "decode_events: error while decoding"
     | _ -> failwith "decode_events: bug found" in

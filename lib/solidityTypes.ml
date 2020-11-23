@@ -11,8 +11,8 @@ type t =
   | String
   | Function
   (* composite *)
-  | SArray of int * t
-  | DArray of t
+  | FArray of int * t
+  | VArray of t
   | Tuple of t list
 [@@deriving eq]
 
@@ -23,9 +23,9 @@ let bytes = Bytes
 let address = Address
 
 let rec is_dynamic = function
-  | Bytes | String | DArray _ -> true
+  | Bytes | String | VArray _ -> true
+  | FArray (_, typ) when is_dynamic typ -> true
   | Tuple typs -> List.exists is_dynamic typs
-  | SArray (_, typ) when is_dynamic typ -> true
   | _ -> false
 
 module Parser = struct
@@ -57,8 +57,8 @@ module Parser = struct
 
   let tl =
     string "[]"
-    >>| (fun _ -> `Dynamic)
-    <|> (char '[' *> num <* char ']' >>| fun n -> `Static n)
+    >>| (fun _ -> `Variable)
+    <|> (char '[' *> num <* char ']' >>| fun n -> `Fixed n)
 
   let atm = choice [int; fixed; bytes; addr; bool; str; func]
 
@@ -70,7 +70,7 @@ module Parser = struct
     >>= fun hd ->
     many tl
     >>| List.fold_left
-          (fun a -> function `Static n -> SArray (n, a) | `Dynamic -> DArray a)
+          (fun a -> function `Fixed n -> FArray (n, a) | `Variable -> VArray a)
           hd
 
   let t = fix expr
@@ -98,8 +98,8 @@ let rec to_string = function
   | String -> "string"
   | Function -> "function"
   (* composite *)
-  | SArray (length, typ) -> to_string typ ^ "[" ^ string_of_int length ^ "]"
-  | DArray typ -> to_string typ ^ "[]"
+  | FArray (length, typ) -> to_string typ ^ "[" ^ string_of_int length ^ "]"
+  | VArray typ -> to_string typ ^ "[]"
   | Tuple types -> "(" ^ String.concat "," (List.map to_string types) ^ ")"
 
 let pp ppf t = Format.pp_print_string ppf (to_string t)

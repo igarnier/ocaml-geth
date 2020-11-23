@@ -88,6 +88,7 @@ let logs =
   ]
 
 module X = Json_encoding.Make (Json_repr.Yojson)
+module ST = SolidityTypes
 
 let ofJson e json () =
   try ignore (X.destruct e json)
@@ -111,13 +112,27 @@ let parse_tests =
   [ "int"; "uint"; "int32"; "uint32"; "address"; "bool"; "fixed"; "fixed12x12";
     "ufixed12x12"; "string"; "function"; "int[]"; "(int,int)" ]
 
-let roundtrip s =
-  let roundtrip = SolidityTypes.(to_string (of_string_exn s)) in
-  check string s s roundtrip
+let svs =
+  SolidityValue.
+    [ int 256 Z.zero; int 256 Z.one; int 256 Z.minus_one; string "";
+      tuple [string ""; string ""]; tuple [string ""]; tuple [int 256 Z.zero];
+      farray [int 256 Z.zero; int 256 Z.zero] (ST.Int 256);
+      varray [int 256 Z.zero; int 256 Z.zero] (ST.Int 256) ]
 
-let parse = [("basic", `Quick, fun () -> List.iter roundtrip parse_tests)]
+let typs =
+  let roundtrip s =
+    let roundtrip = SolidityTypes.(to_string (of_string_exn s)) in
+    check string s s roundtrip in
+  [("basic", `Quick, fun () -> List.iter roundtrip parse_tests)]
+
+let values =
+  let sv = testable SolidityValue.pp SolidityValue.equal in
+  let roundtrip v =
+    let roundtrip = SolidityValue.(encode v |> decode v.t) in
+    check sv (SolidityValue.show v) v roundtrip in
+  [("basic", `Quick, fun () -> List.iter roundtrip svs)]
 
 let () =
   Alcotest.run "geth"
-    [ ("parser", parse); ("compile", compile); ("contract", contract);
-      ("log", log) ]
+    [ ("types", typs); ("values", values); ("compile", compile);
+      ("contract", contract); ("log", log) ]

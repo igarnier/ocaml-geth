@@ -5,12 +5,14 @@ module ST = SolidityTypes
 type t = {t: SolidityTypes.t; v: value}
 
 and value =
-  | Int of Z.t
+  | Int of
+      (Z.t[@printer fun ppf v -> Format.pp_print_string ppf (Z.to_string v)])
   | Bool of bool
   | String of string
   | Address of Address.t
   | Tuple of t list
   | Func of {selector: string; address: Address.t}
+[@@deriving show, eq]
 
 let pack where s =
   match String.length s with
@@ -40,8 +42,8 @@ let z x =
   for i = 0 to len - 1 do
     if Z.testbit x i then Bitstring.set bs i
   done ;
-  let pad = 256 - len in
-  concat [zeroes_bitstring pad; bs]
+  let pad = match Z.sign x with -1 -> ones_bitstring | _ -> zeroes_bitstring in
+  concat [pad (256 - len); bs]
 
 let rec encode x =
   match (x.v, x.t) with
@@ -55,21 +57,20 @@ let rec encode x =
       Bitstring.concat [int (String.length v); pack `Back v]
   | Tuple values, Tuple typs ->
       let encode_heads x offset =
-        if not (ST.is_dynamic x.t) then encode x else int offset in
+        if ST.is_dynamic x.t then int offset else encode x in
       let encode_tails x =
-        if not (ST.is_dynamic x.t) then zeroes_bitstring 0 else encode x in
+        if ST.is_dynamic x.t then encode x else zeroes_bitstring 0 in
       let header_size typs =
         let header_size_of_type typ =
           let open ST in
           match typ with
-          | SArray (length, _) when not (ST.is_dynamic typ) -> 32 * length
+          | FArray (length, _) when not (ST.is_dynamic typ) -> 32 * length
           | Tuple typs when not (ST.is_dynamic typ) -> 32 * List.length typs
           | _ -> 32 in
         List.fold_left (fun acc typ -> acc + header_size_of_type typ) 0 typs
       in
       (* The types are implicitly contained in the values. *)
       (* compute size of header *)
-      let headsz = header_size typs in
       (* convert tail values to bitstrings (possibly empty if not dynamic) *)
       let tails = List.map encode_tails values in
       (* for each value, compute where its dynamic data is stored as an offset,
@@ -77,16 +78,17 @@ let rec encode x =
       let _, offsets =
         List.fold_left
           (fun (offset, acc) bitstr ->
-            let byte_len = bitstring_length bitstr / 8 in
-            let next_offset = offset + byte_len in
-            (next_offset, offset :: acc))
-          (headsz, []) tails in
+            (offset + (bitstring_length bitstr / 8), offset :: acc))
+          (header_size typs, [])
+          tails in
       let offsets = List.rev offsets in
       let heads = List.map2 encode_heads values offsets in
       concat (heads @ tails)
-  | _ ->
-      (* TODO: static/dynamic arrays *)
-      failwith "encode: error"
+  | _, FArray (n, t) -> encode {x with t= Tuple (List.init n (fun _ -> t))}
+  | Tuple vs, VArray t ->
+      let n = List.length vs in
+      concat [int n; encode {x with t= Tuple (List.init n (fun _ -> t))}]
+  | _ -> invalid_arg "encode"
 
 (* -------------------------------------------------------------------------------- *)
 (* Convenience functions to create ABI values *)
@@ -98,8 +100,11 @@ let notstring =
 let unsigned b = string_of_bitstring b |> CCString.rev |> Z.of_bits
 
 let signed b =
-  string_of_bitstring b |> CCString.rev |> notstring |> Z.of_bits |> Z.add Z.one
-  |> Z.neg
+  match Bitstring.get b 0 with
+  | 0 -> unsigned b
+  | _ ->
+      string_of_bitstring b |> CCString.rev |> notstring |> Z.of_bits
+      |> Z.add Z.one |> Z.neg
 
 let int w z = {v= Int z; t= ST.int w}
 let uint w z = {v= Int z; t= ST.uint w}
@@ -109,10 +114,10 @@ let bytes v = {v= String v; t= ST.bytes}
 let bool v = {v= Bool v; t= ST.Bool}
 let address v = {v= Address v; t= ST.address}
 let tuple vals = {v= Tuple vals; t= ST.Tuple (List.map (fun v -> v.t) vals)}
-let static_array vals t = {v= Tuple vals; t= ST.SArray (List.length vals, t)}
-let dynamic_array vals t = {v= Tuple vals; t= ST.DArray t}
+let farray vals t = {v= Tuple vals; t= ST.FArray (List.length vals, t)}
+let varray vals t = {v= Tuple vals; t= ST.VArray t}
 
-let rec decode b t =
+let rec decode t b =
   (* Printf.eprintf "decoding %s with data %s\n" (ST.print t) (Bitstr.Hex.as_string (Bitstr.uncompress b)); *)
   match (t : ST.t) with
   | UInt w -> uint w (unsigned b)
@@ -135,18 +140,14 @@ let rec decode b t =
       let address = takebits 160 b |> string_of_bitstring |> Address.of_binary in
       let selector = takebits 32 (dropbits 160 b) |> string_of_bitstring in
       {v= Func {selector; address}; t= ST.Function}
-  | SArray (n, t) -> static_array (decode_tuple b (List.init n (fun _ -> t))) t
-  | DArray t ->
+  | FArray (n, t) -> farray (decode_tuple b (List.init n (fun _ -> t))) t
+  | VArray t ->
       let n = takebits 256 b |> unsigned |> Z.to_int in
       let b = dropbits 256 b in
-      dynamic_array (decode_tuple b (List.init n (fun _ -> t))) t
+      varray (decode_tuple b (List.init n (fun _ -> t))) t
   | Tuple typs -> tuple (decode_tuple b typs)
 
 and decode_tuple b typs =
-  (* Printf.eprintf "decoding tuple %s with data = %s\n"  *)
-  (*   (ST.print (ST.Ttuple typs))
-   *   (Bitstr.Hex.to_string (Bitstr.uncompress b))
-   * ; *)
   let _, values =
     List.fold_left
       (fun (header_chunk, values) ty ->
@@ -157,10 +158,7 @@ and decode_tuple b typs =
           let offset = Z.to_int offset in
           (* offsets are computed starting from the beginning of [b] *)
           let tail = dropbits (offset * 8) b in
-          let value = decode tail ty in
-          (rem, value :: values)
-        else
-          let value = decode chunk ty in
-          (rem, value :: values))
+          (rem, decode ty tail :: values)
+        else (rem, decode ty chunk :: values))
       (b, []) typs in
   List.rev values

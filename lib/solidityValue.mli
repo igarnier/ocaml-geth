@@ -9,6 +9,7 @@ and value =
   | Address of Address.t
   | Tuple of t list
   | Func of {selector: string; address: Address.t}
+[@@deriving show, eq]
 
 val int : int -> Z.t -> t
 val uint : int -> Z.t -> t
@@ -18,7 +19,7 @@ val bytes : string -> t
 val bool : bool -> t
 val address : Address.t -> t
 val tuple : t list -> t
-val static_array : t list -> SolidityTypes.t -> t
-val dynamic_array : t list -> SolidityTypes.t -> t
+val farray : t list -> SolidityTypes.t -> t
+val varray : t list -> SolidityTypes.t -> t
 val encode : t -> Bitstring.t
-val decode : Bitstring.t -> SolidityTypes.t -> t
+val decode : SolidityTypes.t -> Bitstring.t -> t

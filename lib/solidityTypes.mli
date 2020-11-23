@@ -11,8 +11,8 @@ type t =
   | String
   | Function
   (* composite *)
-  | SArray of int * t
-  | DArray of t
+  | FArray of int * t
+  | VArray of t
   | Tuple of t list
 [@@deriving eq]
 
