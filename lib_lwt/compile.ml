@@ -56,13 +56,8 @@ let to_json ~filename =
 
 let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract ~arguments
     ?gas ?value () =
-  let prepare_constructor ({abi; bin} : contract) =
-    let constr =
-      List.find_map
-        (function
-          | ABI.Fun x when ABI.Fun.is_constructor x -> Some x | _ -> None)
-        abi
-      |> Option.get in
+  let prepare_constructor ({funcs; bin; _} : contract) =
+    let constr = List.find_opt ABI.Fun.is_constructor funcs |> Option.get in
     let encoded =
       match arguments with
       | [] -> Bitstring.empty_bitstring

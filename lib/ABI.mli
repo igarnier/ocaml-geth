@@ -29,7 +29,7 @@ type t = Fun of Fun.t | Event of Evt.t
 val func : t -> Fun.t option
 val event : t -> Evt.t option
 val encoding : t encoding
-val event_of_log : t list -> Log.t -> event
+val event_of_log : Evt.t list -> Log.t -> event
 
 (**/*)
 

@@ -139,14 +139,8 @@ let to_0x b =
 
 let event_of_log abis log =
   let codes =
-    List.fold_left
-      (fun acc abi ->
-        match abi with
-        | Event event_abi ->
-            let id = to_0x (event_id event_abi) in
-            (id, event_abi) :: acc
-        | _ -> acc)
-      [] abis in
+    List.map (fun event_abi -> (to_0x (event_id event_abi), event_abi)) abis
+  in
   let topics = log.Log.topics in
   let data = log.data in
   (* Check whether /at most one/ topic corresponds to an event *)
