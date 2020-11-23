@@ -35,20 +35,21 @@ let int x =
   let pad = zeroes_bitstring (256 - bitstring_length x) in
   concat [pad; x]
 
-let z x =
+let z pad x =
   let len = Z.numbits x in
+  let padf =
+    match Z.sign x with -1 -> ones_bitstring | _ -> zeroes_bitstring in
   assert (len < 257) ;
-  let bs = Bitstring.zeroes_bitstring len in
+  let bs = padf len in
   for i = 0 to len - 1 do
-    if Z.testbit x i then Bitstring.set bs i
+    if Z.testbit x i then set bs i
   done ;
-  let pad = match Z.sign x with -1 -> ones_bitstring | _ -> zeroes_bitstring in
-  concat [pad (256 - len); bs]
+  match pad - len with x when x <= 0 -> bs | x -> concat [padf x; bs]
 
 let rec encode x =
   match (x.v, x.t) with
-  | Int v, ST.UInt _ when Z.sign v > 0 -> z v
-  | Int v, Int _ -> z v
+  | Int v, ST.UInt _ when Z.sign v > 0 -> z 256 v
+  | Int v, Int _ -> z 256 v
   | Bool true, Bool -> int 1
   | Bool false, Bool -> int 0
   | Address v, Address -> address v
@@ -90,6 +91,22 @@ let rec encode x =
       concat [int n; encode {x with t= Tuple (List.init n (fun _ -> t))}]
   | _ -> invalid_arg "encode"
 
+let rec packed x =
+  match (x.v, x.t) with
+  | Int v, ST.UInt n when Z.sign v > 0 -> z n v
+  | Int v, Int n -> z n v
+  | Bool true, Bool -> Bitstring.ones_bitstring 1
+  | Bool false, Bool -> Bitstring.zeroes_bitstring 1
+  | Address v, Address -> Bitstring.bitstring_of_string (v :> string)
+  | String v, NBytes _ -> Bitstring.bitstring_of_string v
+  | String v, String | String v, Bytes -> Bitstring.bitstring_of_string v
+  | Tuple values, Tuple _typs -> concat (List.map packed values)
+  | _, FArray (n, t) -> packed {x with t= Tuple (List.init n (fun _ -> t))}
+  | Tuple vs, VArray t ->
+      let n = List.length vs in
+      concat [int n; packed {x with t= Tuple (List.init n (fun _ -> t))}]
+  | _ -> invalid_arg "packed"
+
 (* -------------------------------------------------------------------------------- *)
 (* Convenience functions to create ABI values *)
 
@@ -111,6 +128,7 @@ let uint w z = {v= Int z; t= ST.uint w}
 let uint256 z = {v= Int z; t= ST.uint 256}
 let string v = {v= String v; t= ST.string}
 let bytes v = {v= String v; t= ST.bytes}
+let nbytes v = {v= String v; t= ST.NBytes (String.length v)}
 let bool v = {v= Bool v; t= ST.Bool}
 let address v = {v= Address v; t= ST.address}
 let tuple vals = {v= Tuple vals; t= ST.Tuple (List.map (fun v -> v.t) vals)}

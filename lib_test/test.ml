@@ -132,7 +132,61 @@ let values =
     check sv (SolidityValue.show v) v roundtrip in
   [("basic", `Quick, fun () -> List.iter roundtrip svs)]
 
+let bs =
+  let pp ppf x =
+    Format.fprintf ppf "%a" Hex.pp
+      (Hex.of_string (Bitstring.string_of_bitstring x)) in
+  testable pp Bitstring.equals
+
+let packeds =
+  SolidityValue.
+    [ (int 16 Z.minus_one, `Hex "ffff");
+      ( tuple
+          [ nbytes
+              (Hex.to_string (`Hex "deadbeef00000000000000000000000000000000"));
+            nbytes
+              (Hex.to_string
+                 (`Hex
+                   "000000000000000000000000feed000000000000000000000000000000000000"))
+          ],
+        `Hex
+          "deadbeef00000000000000000000000000000000000000000000000000000000feed000000000000000000000000000000000000"
+      );
+      ( tuple
+          [ int 16 Z.minus_one; bytes "\x42"; uint 16 (Z.of_int 3);
+            string "Hello, world!" ],
+        `Hex "ffff42000348656c6c6f2c20776f726c6421" ) ]
+
+let packed =
+  let open SolidityValue in
+  let roundtrip (v, e) =
+    let e = Bitstring.bitstring_of_string (Hex.to_string e) in
+    check bs (show v) e (packed v) in
+  [("basic", `Quick, fun () -> List.iter roundtrip packeds)]
+
+let create2s =
+  [ ( `Hex "deadbeef00000000000000000000000000000000",
+      `Hex "000000000000000000000000feed000000000000000000000000000000000000",
+      `Hex "00",
+      `Hex "D04116cDd17beBE565EB2422F2497E06cC1C9833" );
+    ( `Hex "0000000000000000000000000000000000000000",
+      `Hex "0000000000000000000000000000000000000000000000000000000000000000",
+      `Hex "00",
+      `Hex "4D1A2e2bB4F88F0250f26Ffff098B0b30B26BF38" ) ]
+
+let create2 =
+  let open Types in
+  let roundtrip (addr, salt, initCode, res) =
+    let addr = Address.of_hex addr in
+    let salt = Hex.to_string salt in
+    let initCode = ABI.keccak (Hex.to_string initCode) in
+    let res = Hex.to_string res in
+    let x = ABI.create2 ~addr ~salt ~initCode in
+    check Alcotest.string "" res x in
+  [("basic", `Quick, fun () -> List.iter roundtrip create2s)]
+
 let () =
   Alcotest.run "geth"
-    [ ("types", typs); ("values", values); ("compile", compile);
-      ("contract", contract); ("log", log) ]
+    [ ("types", typs); ("values", values); ("packed", packed);
+      ("create2", create2); ("compile", compile); ("contract", contract);
+      ("log", log) ]

@@ -130,7 +130,7 @@ let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
 
 let call_void_method_tx ~mname ~(src : Types.Address.t) ~(ctx : Types.Address.t)
     ?gas () =
-  let method_id = ABI.keccak_4_bytes mname in
+  let method_id = ABI.keccak_4_bytes mname |> Bitstring.bitstring_of_string in
   let data = ABI.to_0x method_id in
   let tx =
     { Types.Tx.src;

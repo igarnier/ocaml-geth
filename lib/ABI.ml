@@ -109,26 +109,27 @@ let encoding =
 (* Computing function selectors *)
 
 let string_of_signature name inputs =
-  let encodings = Array.map (fun {t; _} -> ST.to_string t) inputs in
-  let elts = String.concat "," (Array.to_list encodings) in
-  name ^ "(" ^ elts ^ ")"
+  let inputs = Array.to_list inputs in
+  let inputs = List.map (fun {t; _} -> t) inputs in
+  name ^ ST.to_string (Tuple inputs)
 
-let keccak str =
-  let hash = Cryptokit.Hash.keccak 256 in
-  let resl = Cryptokit.hash_string hash str in
-  Bitstring.bitstring_of_string resl
+let keccak str = Cryptokit.(hash_string (Hash.keccak 256) str)
 
 let keccak_4_bytes str =
-  let hash = Cryptokit.Hash.keccak 256 in
-  let resl = Cryptokit.hash_string hash str in
-  let head = String.sub resl 0 4 in
-  Bitstring.bitstring_of_string head
+  Cryptokit.(hash_string (Hash.keccak 256) str) |> fun s -> String.sub s 0 4
 
 let method_id {Fun.name; inputs; _} =
   keccak_4_bytes (string_of_signature name inputs)
+  |> Bitstring.bitstring_of_string
 
 let event_id {Evt.name; inputs; anonymous= _} =
-  keccak (string_of_signature name inputs)
+  keccak (string_of_signature name inputs) |> Bitstring.bitstring_of_string
+
+let create2 ~addr ~salt ~initCode =
+  let open SV in
+  tuple [nbytes "\xff"; address addr; nbytes salt; nbytes initCode]
+  |> packed |> Bitstring.string_of_bitstring
+  |> fun s -> String.sub (keccak s) 12 20
 
 (* -------------------------------------------------------------------------------- *)
 

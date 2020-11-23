@@ -34,5 +34,8 @@ val event_of_log : t list -> Log.t -> event
 (**/*)
 
 val to_0x : Bitstring.t -> string
-val keccak_4_bytes : string -> Bitstring.t
+val keccak : string -> string
+val keccak_4_bytes : string -> string
+val event_id : Evt.t -> Bitstring.t
 val method_id : Fun.t -> Bitstring.t
+val create2 : addr:Address.t -> salt:string -> initCode:string -> string
