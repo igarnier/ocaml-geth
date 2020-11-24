@@ -4,6 +4,7 @@ module type BINARY = sig
   val of_0x : string -> t
   val of_hex : Hex.t -> t
   val of_binary : ?pos:int -> string -> t
+  val to_bitstring : t -> Bitstring.t
   val encoding : t Json_encoding.encoding
 end
 

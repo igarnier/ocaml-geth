@@ -1,3 +1,4 @@
+open Lwt.Infix
 module Rpc_lwt = Rpc
 open Geth
 open Contract
@@ -102,11 +103,12 @@ let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
         mname siglen arglen in
     Lwt_log.debug_f "%s" m ;%lwt Lwt.fail_with m )
   else
-    let method_id = ABI.method_id abi in
-    Lwt_log.debug_f "calling method %s with code %s\n%!" mname
-      (ABI.to_0x method_id) ;%lwt
+    Lwt_log.debug_f "calling method %s" mname
+    >>= fun () ->
     let encoded = SolidityValue.(encode (tuple arguments)) in
-    let bitstring = Bitstring.concat [method_id; encoded] in
+    let bitstring =
+      Bitstring.(concat [bitstring_of_string (ABI.Fun.selector abi); encoded])
+    in
     let data = ABI.to_0x bitstring in
     let raw_transaction =
       { Types.Tx.src;

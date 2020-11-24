@@ -11,6 +11,7 @@ module type BINARY = sig
   val of_0x : string -> t
   val of_hex : Hex.t -> t
   val of_binary : ?pos:int -> string -> t
+  val to_bitstring : t -> Bitstring.t
   val encoding : t Json_encoding.encoding
 end
 
@@ -20,6 +21,7 @@ module Binary (X : LEN) = struct
   let of_0x x = Hex.to_string (`Hex (String.sub x 2 (2 * X.length)))
   let of_hex = Hex.to_string
   let of_binary ?(pos = 0) x = String.sub x pos X.length
+  let to_bitstring = Bitstring.bitstring_of_string
 
   let show x =
     let (`Hex x) = Hex.of_string x in

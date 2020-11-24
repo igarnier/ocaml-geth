@@ -109,15 +109,9 @@ let log =
     logs
 
 let parse_tests =
-  [ "int"; "uint"; "int32"; "uint32"; "address"; "bool"; "fixed"; "fixed12x12";
-    "ufixed12x12"; "string"; "function"; "int[]"; "(int,int)" ]
-
-let svs =
-  SolidityValue.
-    [ int 256 Z.zero; int 256 Z.one; int 256 Z.minus_one; string "";
-      tuple [string ""; string ""]; tuple [string ""]; tuple [int 256 Z.zero];
-      farray [int 256 Z.zero; int 256 Z.zero] (ST.Int 256);
-      varray [int 256 Z.zero; int 256 Z.zero] (ST.Int 256) ]
+  [ "int256"; "uint256"; "int32"; "uint32"; "address"; "bool"; "fixed";
+    "fixed12x12"; "ufixed12x12"; "string"; "function"; "int256[]";
+    "(int256,int256)" ]
 
 let typs =
   let roundtrip s =
@@ -125,12 +119,37 @@ let typs =
     check string s s roundtrip in
   [("basic", `Quick, fun () -> List.iter roundtrip parse_tests)]
 
+let svs =
+  SolidityValue.
+    [ int 256 Z.zero; int 256 Z.one; int 256 Z.minus_one; string "";
+      uint 256 Z.(of_int 256); uint 256 Z.(of_int 12121);
+      uint 256 (Z.of_int (1 lsl 16)); uint 256 (Z.of_int (1 lsl 24));
+      tuple [string ""; string ""]; tuple [string ""]; tuple [int 256 Z.zero];
+      farray [int 256 Z.zero; int 256 Z.zero] (ST.Int 256);
+      varray [int 256 Z.zero; int 256 Z.zero] (ST.Int 256) ]
+
+let vs =
+  let open Bitstring in
+  let open SolidityValue in
+  let with_bit_sets l =
+    let buf = zeroes_bitstring 256 in
+    List.iter (fun i -> set buf i) l ;
+    buf in
+  [(uint 256 Z.zero, with_bit_sets []); (uint 256 Z.one, with_bit_sets [255])]
+
+let z = testable Z.pp_print Z.equal
+
 let values =
-  let sv = testable SolidityValue.pp SolidityValue.equal in
+  let open SolidityValue in
+  let sv = testable pp equal in
   let roundtrip v =
-    let roundtrip = SolidityValue.(encode v |> decode v.t) in
-    check sv (SolidityValue.show v) v roundtrip in
-  [("basic", `Quick, fun () -> List.iter roundtrip svs)]
+    let roundtrip = encode v |> decode v.t in
+    check sv (show v) v roundtrip in
+  let onetrip (expected, v) =
+    let v = decode expected.t v in
+    check sv "" expected v in
+  [ ("roundtrip", `Quick, fun () -> List.iter roundtrip svs);
+    ("onetrip", `Quick, fun () -> List.iter onetrip vs) ]
 
 let bs =
   let pp ppf x =

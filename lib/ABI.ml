@@ -3,7 +3,7 @@ open Types
 module ST = SolidityTypes
 module SV = SolidityValue
 
-type event = {name: string; args: SV.t list}
+type event = {name: string; args: SV.t list} [@@deriving show]
 type named = {name: string; t: ST.t; indexed: bool}
 
 let of_named {t; _} = t
@@ -42,6 +42,10 @@ let named x =
        (dft "internalType" string ""))
 
 let named = mu "named" named
+let keccak str = Cryptokit.(hash_string (Hash.keccak 256) str)
+
+let keccak_4_bytes str =
+  Cryptokit.(hash_string (Hash.keccak 256) str) |> fun s -> String.sub s 0 4
 
 module Fun = struct
   type t =
@@ -77,6 +81,13 @@ module Fun = struct
             (req "stateMutability" mutability)))
 
   let is_constructor = function {kind= Constructor; _} -> true | _ -> false
+
+  let signature {name; inputs; _} =
+    let inputs = Array.to_list inputs in
+    let inputs = List.map (fun {t; _} -> t) inputs in
+    name ^ ST.to_string (Tuple inputs)
+
+  let selector x = keccak_4_bytes (signature x)
 end
 
 module Evt = struct
@@ -91,6 +102,37 @@ module Evt = struct
          (dft "name" string "")
          (dft "inputs" (array named) [||])
          (req "anonymous" bool))
+
+  let signature {name; inputs; _} =
+    let inputs = Array.to_list inputs in
+    let inputs = List.map (fun {t; _} -> t) inputs in
+    name ^ ST.to_string (Tuple inputs)
+
+  let of_log evts log =
+    let open CCOpt.Infix in
+    let selector x = keccak (signature x) |> Hash256.of_binary in
+    let sign = log.Log.topics.(0) in
+    let evts = List.map (fun e -> (selector e, e)) evts in
+    List.assoc_opt sign evts
+    >|= fun {name; inputs; anonymous= _} ->
+    let _, _, args =
+      let nonIndexed =
+        List.filter_map
+          (fun x -> if x.indexed then None else Some x.t)
+          (Array.to_list inputs) in
+      let data = ST.Tuple nonIndexed in
+      let indexedV =
+        match (SV.decode data (Bitstring.bitstring_of_string log.data)).v with
+        | SV.Tuple x -> x
+        | _ -> assert false in
+      Array.fold_left
+        (fun (i, iv, a) {t; indexed; _} ->
+          if indexed then
+            (* TODO: support non immediate values. *)
+            (succ i, iv, SV.decode t (Hash256.to_bitstring log.topics.(i)) :: a)
+          else match iv with [] -> assert false | h :: t -> (i, t, h :: a))
+        (0, indexedV, []) inputs in
+    {name; args= List.rev args}
 end
 
 type t = Fun of Fun.t | Event of Evt.t
@@ -108,23 +150,6 @@ let encoding =
 (* -------------------------------------------------------------------------------- *)
 (* Computing function selectors *)
 
-let string_of_signature name inputs =
-  let inputs = Array.to_list inputs in
-  let inputs = List.map (fun {t; _} -> t) inputs in
-  name ^ ST.to_string (Tuple inputs)
-
-let keccak str = Cryptokit.(hash_string (Hash.keccak 256) str)
-
-let keccak_4_bytes str =
-  Cryptokit.(hash_string (Hash.keccak 256) str) |> fun s -> String.sub s 0 4
-
-let method_id {Fun.name; inputs; _} =
-  keccak_4_bytes (string_of_signature name inputs)
-  |> Bitstring.bitstring_of_string
-
-let event_id {Evt.name; inputs; anonymous= _} =
-  keccak (string_of_signature name inputs) |> Bitstring.bitstring_of_string
-
 let create2 ~addr ~salt ~initCode =
   let open SV in
   tuple [nbytes "\xff"; address addr; nbytes salt; nbytes initCode]
@@ -136,27 +161,3 @@ let create2 ~addr ~salt ~initCode =
 let to_0x b =
   let (`Hex res) = Hex.of_string (Bitstring.string_of_bitstring b) in
   "0x" ^ res
-
-let event_of_log abis log =
-  let codes =
-    List.map (fun event_abi -> (to_0x (event_id event_abi), event_abi)) abis
-  in
-  let topics = log.Log.topics in
-  let data = log.data in
-  (* Check whether /at most one/ topic corresponds to an event *)
-  let relevant =
-    List.filter
-      (fun hash -> List.mem_assoc hash codes)
-      (Array.to_list topics :> string list) in
-  let event =
-    match relevant with
-    | [hash] -> List.assoc hash codes
-    | _ -> failwith "0 or > 1 matching event for topic, aborting" in
-  let types = Array.to_list event.inputs in
-  let ty = ST.Tuple (List.map (fun {t; _} -> t) types) in
-  let fields =
-    match SV.decode ty (Bitstring.bitstring_of_string data) with
-    | {v= SV.Tuple values; _} -> values
-    | exception _ -> failwith "decode_events: error while decoding"
-    | _ -> failwith "decode_events: bug found" in
-  {name= event.name; args= fields}

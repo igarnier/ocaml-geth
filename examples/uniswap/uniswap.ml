@@ -53,7 +53,24 @@ let process_user_input x =
     x
   |> return
 
-let main () =
+module YE = Json_encoding.Make (Json_repr.Yojson)
+module ST = SolidityTypes
+
+let ofJson e json =
+  try YE.destruct e json
+  with Json_encoding.Cannot_destruct (_path, exn) ->
+    Format.kasprintf failwith "%a"
+      (Json_encoding.print_error ?print_unknown:None)
+      exn
+
+let main abis =
+  let abis =
+    List.fold_left abis ~init:[] ~f:(fun a fn ->
+        let {Contract.evts; _} =
+          ofJson Contract.simple (Yojson.Safe.from_file fn) in
+        List.iter evts ~f:(fun e ->
+            info (fun m -> m "%s: %s" fn (ABI.Evt.signature e))) ;
+        List.rev_append evts a) in
   Async_uri.with_connection url (fun {r; w; _} ->
       Fastws_async.with_connection url r w of_frame to_frame (fun r w ->
           don't_wait_for
@@ -61,17 +78,21 @@ let main () =
                Reader.(pipe @@ Lazy.force stdin)
                w ~f:process_user_input) ;
           Pipe.iter_without_pushback r ~f:(fun msg ->
-              info (fun m -> m "%a" Rpc.pp_msg msg))))
+              match msg with
+              | Notification (_, Log l) -> (
+                match ABI.Evt.of_log abis l with
+                | None -> err (fun m -> m "Could not parse log")
+                | Some x -> info (fun m -> m "%a" ABI.pp_event x) )
+              | _ -> info (fun m -> m "%a" Rpc.pp_msg msg))))
 
 let () =
   Command.async_or_error ~summary:"Geth WS"
     (let open Command.Let_syntax in
     [%map_open
-      let () = Logs_async_reporter.set_level_via_param [] in
+      let () = Logs_async_reporter.set_level_via_param []
+      and abis = anon (sequence ("file" %: string)) in
       fun () ->
         Log.Global.set_level `Debug ;
-        let pp_header ppf _ = Format.pp_print_string ppf "" in
-        Logs.set_reporter
-          (Logs_async_reporter.reporter ~pp_header (Lazy.force Log.Global.log)) ;
-        Fastws_async_raw.to_or_error (main ())])
+        Logs.set_reporter (Logs_async_reporter.reporter ()) ;
+        Fastws_async_raw.to_or_error (main abis)])
   |> Command.run

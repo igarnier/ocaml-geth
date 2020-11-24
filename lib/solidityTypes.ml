@@ -83,8 +83,6 @@ let of_string_exn s =
 
 let rec to_string = function
   (* atoms *)
-  | UInt 256 -> "uint"
-  | Int 256 -> "int"
   | UInt w -> "uint" ^ string_of_int w
   | Int w -> "int" ^ string_of_int w
   | Address -> "address"

@@ -40,9 +40,9 @@ let z pad x =
   let padf =
     match Z.sign x with -1 -> ones_bitstring | _ -> zeroes_bitstring in
   assert (len < 257) ;
-  let bs = padf len in
+  let bs = zeroes_bitstring len in
   for i = 0 to len - 1 do
-    if Z.testbit x i then set bs i
+    if Z.testbit x i then set bs (len - i - 1)
   done ;
   match pad - len with x when x <= 0 -> bs | x -> concat [padf x; bs]
 
@@ -140,8 +140,7 @@ let rec decode t b =
   match (t : ST.t) with
   | UInt w -> uint w (unsigned b)
   | Int w -> int w (signed b)
-  | Address ->
-      address (Address.of_binary (subbitstring b 12 20 |> string_of_bitstring))
+  | Address -> address (Address.of_binary ~pos:12 (string_of_bitstring b))
   | Bool -> bool (get b 255 <> 0)
   | Fixed _ | UFixed _ ->
       failwith "decode_atomic: fixed point numbers not handled yet"
