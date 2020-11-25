@@ -1,0 +1,6 @@
+(executable
+ (name monitor)
+ (public_name geth-monitor)
+ (package geth-lwt)
+ (modules monitor)
+ (libraries geth geth-lwt))

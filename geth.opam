@@ -1,0 +1,22 @@
+opam-version: "2.0"
+maintainer: "ilias.gar@gmail.com"
+authors: ["Ilias Garnier <ilias.gar@gmail.com>"
+          "Vincent Bernardoff <vb@luminar.eu.org>"]
+homepage: "https://github.com/igarnier/ocaml-geth"
+bug-reports: "https://github.com/igarnier/ocaml-geth"
+dev-repo: "git+https://github.com/igarnier/ocaml-geth"
+license: "MIT"
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]
+depends: [
+  "ocaml" {>= "4.10"}
+  "dune" {build & >= "1.0"}
+  "angstrom" {>= "0.15.0"}
+  "containers" {>= "3.0.1"}
+  "yojson"
+  "cryptokit"
+  "zarith"
+  "hex"
+]
+synopsis: "An OCaml overlay over the Go-Ethereum (geth) client"

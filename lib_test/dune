@@ -1,0 +1,9 @@
+(test
+ (name test)
+ (deps helloworld.sol
+       IERC20.json
+       IUniswapV2Callee.json
+       IUniswapV2ERC20.json
+       IUniswapV2Factory.json
+       IUniswapV2Pair.json)
+ (libraries alcotest geth geth-lwt hex))

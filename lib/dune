@@ -1,0 +1,13 @@
+(library
+ (name geth)
+ (public_name geth)
+ (preprocess (pps ppx_bitstring ppx_deriving.std))
+ (libraries
+   ocplib-json-typed
+   yojson
+   containers
+   cryptokit
+   zarith
+   bitstring
+   hex
+   angstrom))

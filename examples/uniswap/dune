@@ -1,0 +1,16 @@
+(executable
+ (public_name uniswap)
+ (package geth-async)
+ (preprocess (pps ppx_jane))
+ (libraries
+   uri
+   core
+   async
+   yojson
+   ocplib-json-typed
+   async-uri
+   fastws-async
+   geth
+   ezjsonm
+   logs-async
+   logs-async-reporter))

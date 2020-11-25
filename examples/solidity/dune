@@ -1,0 +1,5 @@
+(executables
+ (names storage erc20)
+ (public_names geth-storage geth-erc20)
+ (package geth-lwt)
+ (libraries geth geth-lwt))

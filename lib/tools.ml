@@ -1,8 +1,1 @@
-open Batteries
-
-let bits width z =
-  let res = Array.init width (Z.testbit z) in
-  Array.rev_in_place res;
-  res
-  
-  
+let bits width z = Array.init width (fun i -> Z.testbit z (width - i - 1))
