@@ -48,12 +48,13 @@ let input_password (account : Types.Address.t) =
 
 module Storage (X : sig
   val account : Types.Address.t
-  val uri : string
+  val uri : Uri.t
 end) =
 struct
   let _ =
     let passphrase = input_password X.account in
-    Rpc.Personal.unlock_account ~account:X.account ~uri:"http://localhost:8545"
+    Rpc.Personal.unlock_account ~account:X.account
+      (Uri.of_string "http://localhost:8545")
       ~passphrase ~unlock_duration:3600
 
   (* Compile solidity file using solc with the right options, parse the
@@ -62,7 +63,7 @@ struct
 
   (* Get the contract address on chain *)
   let deploy_receipt () =
-    deploy_rpc ~uri:X.uri ~account:X.account ~gas:(Z.of_int 175000)
+    deploy_rpc ~url:X.uri ~account:X.account ~gas:(Z.of_int 175000)
       ~contract:solidity_output
       ~arguments:
         SolidityValue.[uint256 (Z.of_int64 0x123456L); string "This is a test"]
@@ -92,7 +93,7 @@ struct
     fun i ->
       storage_ctx_address ()
       >>= fun ctx ->
-      execute_method ~uri:X.uri ~abi:set_abi
+      execute_method ~url:X.uri ~abi:set_abi
         ~arguments:[SolidityValue.uint256 i] ~src:X.account ~ctx
         ~gas:(Z.of_int 99999) ()
       >|= fun {logs; _} ->
@@ -108,7 +109,7 @@ struct
     fun () ->
       storage_ctx_address ()
       >>= fun ctx ->
-      call_method ~uri:X.uri ~abi:get_abi ~arguments:[] ~src:X.account ~ctx
+      call_method ~url:X.uri ~abi:get_abi ~arguments:[] ~src:X.account ~ctx
         ~gas:(Z.of_int 99999) ()
 
   (* let _ = 
@@ -126,7 +127,7 @@ end
 
 module X = struct
   let account = Types.Address.of_0x "0x0cb903d0139c1322a52f70038332efd363f94ea8"
-  let uri = "http://localhost:8545"
+  let uri = Uri.of_string "http://localhost:8545"
 end
 
 module S = Storage (X)

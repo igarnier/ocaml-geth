@@ -9,8 +9,8 @@ open Rpc
 type block_predicate = Block.t -> bool
 type state = {block_number: int; blocks: Block.t list}
 
-let poll_new_block uri state =
-  Eth.get_block_by_number ~uri ~at_time:(`block (state.block_number + 1))
+let poll_new_block url state =
+  Eth.get_block_by_number url ~at_time:(`block (state.block_number + 1))
   >|= function
   | None -> None
   | Some block -> (
@@ -31,12 +31,12 @@ let process_action action_table new_block =
   in
   loop action_table
 
-let rec iter_blocks period uri state f =
-  poll_new_block uri state
+let rec iter_blocks period url state f =
+  poll_new_block url state
   >>= function
-  | None -> Lwt_unix.sleep period >>= fun () -> iter_blocks period uri state f
+  | None -> Lwt_unix.sleep period >>= fun () -> iter_blocks period url state f
   | Some ({blocks= new_block :: _; _} as new_state) ->
-      f new_block >>= fun () -> iter_blocks period uri new_state f
+      f new_block >>= fun () -> iter_blocks period url new_state f
   | _ -> Lwt.fail_with "poll_loop: impossible state reached!?"
 
 let default_action block =
@@ -47,11 +47,16 @@ let default_action block =
   Lwt.return_unit
 
 let main () =
-  let uri = "http://localhost:8545" in
+  let infura =
+    lazy (String.split_on_char ':' (Sys.getenv "INFURA") |> List.hd) in
+  let url =
+    Uri.make ~scheme:"https" ~host:"mainnet.infura.io"
+      ~path:(Filename.concat "v3" (Lazy.force infura))
+      () in
   Rpc.switch_debug () ;
-  Eth.block_number ~uri
+  Eth.block_number url
   >>= fun block_number ->
   let state = {block_number; blocks= []} in
-  iter_blocks 0.5 uri state default_action
+  iter_blocks 0.5 url state default_action
 
 let () = Lwt_main.run (main ())

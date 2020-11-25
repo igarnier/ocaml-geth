@@ -33,13 +33,14 @@ type mode =
 
 module Erc20 (X : sig
   val account : Types.Address.t
-  val uri : string
+  val uri : Uri.t
   val mode : mode
 end) =
 struct
   let _ =
     let passphrase = input_password X.account in
-    Rpc.Personal.unlock_account ~account:X.account ~uri:"http://localhost:8545"
+    Rpc.Personal.unlock_account ~account:X.account
+      (Uri.of_string "http://localhost:8545")
       ~passphrase ~unlock_duration:3600
 
   (* Compile solidity file using solc with the right options, parse the
@@ -50,7 +51,7 @@ struct
     match X.mode with
     | Create {initial_supply; token_name; token_symbol} -> (
         (* Get the contract address on chain *)
-        deploy_rpc ~uri:X.uri ~account:X.account ~gas:(Z.of_int 999999)
+        deploy_rpc ~url:X.uri ~account:X.account ~gas:(Z.of_int 999999)
           ~contract:solidity_output
           ~arguments:
             SolidityValue.
@@ -86,7 +87,7 @@ struct
     fun dst value ->
       get_ctx_address ()
       >>= fun ctx ->
-      execute_method ~uri:X.uri ~abi:transfer_abi ~src:X.account ~ctx
+      execute_method ~url:X.uri ~abi:transfer_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
         ~arguments:SolidityValue.[address dst; uint256 value]
         ()
@@ -108,7 +109,7 @@ struct
     fun src dst value ->
       get_ctx_address ()
       >>= fun ctx ->
-      execute_method ~uri:X.uri ~abi:transfer_from_abi ~src:X.account ~ctx
+      execute_method ~url:X.uri ~abi:transfer_from_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
         ~arguments:SolidityValue.[address src; address dst; uint256 value]
         ()
@@ -129,7 +130,7 @@ struct
     fun spender value ->
       get_ctx_address ()
       >>= fun ctx ->
-      execute_method ~uri:X.uri ~abi:approve_abi ~src:X.account ~ctx
+      execute_method ~url:X.uri ~abi:approve_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
         ~arguments:SolidityValue.[address spender; uint256 value]
         ()
@@ -151,7 +152,7 @@ struct
     fun spender value extra_data ->
       get_ctx_address ()
       >>= fun ctx ->
-      execute_method ~uri:X.uri ~abi:approve_and_call_abi ~src:X.account ~ctx
+      execute_method ~url:X.uri ~abi:approve_and_call_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
         ~arguments:
           SolidityValue.[address spender; uint256 value; bytes extra_data]
@@ -167,7 +168,7 @@ struct
     fun src ->
       get_ctx_address ()
       >>= fun ctx ->
-      call_method ~uri:X.uri ~abi:get_balance_abi ~arguments:[] ~src ~ctx
+      call_method ~url:X.uri ~abi:get_balance_abi ~arguments:[] ~src ~ctx
         ~gas:(Z.of_int 99999) ()
 
   (**
@@ -185,7 +186,7 @@ struct
     fun value ->
       get_ctx_address ()
       >>= fun ctx ->
-      execute_method ~uri:X.uri ~abi:burn_abi ~src:X.account ~ctx
+      execute_method ~url:X.uri ~abi:burn_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
         ~arguments:SolidityValue.[uint256 value]
         ()
@@ -206,7 +207,7 @@ struct
     fun from value ->
       get_ctx_address ()
       >>= fun ctx ->
-      execute_method ~uri:X.uri ~abi:burn_from_abi ~src:X.account ~ctx
+      execute_method ~url:X.uri ~abi:burn_from_abi ~src:X.account ~ctx
         ~gas:(Z.of_int 99999)
         ~arguments:SolidityValue.[address from; uint256 value]
         ()

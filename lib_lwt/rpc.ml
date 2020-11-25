@@ -9,7 +9,7 @@ let print_debug s =
   if !debug_flag then Lwt_log.debug_f "Ocaml_geth.Rpc: %s" s
   else Lwt.return_unit
 
-let rpc_call uri method_name (params : Yojson.Safe.t) =
+let rpc_call url method_name (params : Yojson.Safe.t) =
   let json : Yojson.Safe.t =
     `Assoc
       [ ("jsonrpc", `String "2.0"); ("method", `String method_name);
@@ -19,8 +19,7 @@ let rpc_call uri method_name (params : Yojson.Safe.t) =
   let headers = Cohttp.Header.of_list [("Content-type", "application/json")] in
   let body = Cohttp_lwt.Body.of_string data in
   print_debug (Printf.sprintf "Rpc.call: raw request =\n%s\n" data) ;%lwt
-  let%lwt _resp, body =
-    Cohttp_lwt_unix.Client.post (Uri.of_string uri) ~headers ~body in
+  let%lwt _resp, body = Cohttp_lwt_unix.Client.post url ~headers ~body in
   match body with
   | `Empty -> Lwt.fail_with "Ocaml_geth.Rpc.rpc_call: error, empty reply"
   | `Strings _ls -> Lwt.fail_with "Ocaml_geth.Rpc.rpc_call: error, string list"
@@ -38,7 +37,7 @@ let rpc_call uri method_name (params : Yojson.Safe.t) =
             "Ocaml_geth.Rpc.rpc_call: error, cannot interpret multi-part reply"
       )
 
-(* let req = new Http_client.post_raw uri data in
+(* let req = new Http_client.post_raw url data in
  * req#set_req_header "Content-type" "application/json";
  * let pipeline = new Http_client.pipeline in
  * let errormsg = ref None in
@@ -71,7 +70,7 @@ let rpc_call uri method_name (params : Yojson.Safe.t) =
  * | Some error ->
  *   Lwt.fail_with error *)
 
-(* let rpc_call uri method_name (params : Json.json) =
+(* let rpc_call url method_name (params : Json.json) =
  *   let open Yojson.Safe in
  *   let json : Json.json =
  *     `Assoc [ ("jsonrpc", `String "2.0");
@@ -82,7 +81,7 @@ let rpc_call uri method_name (params : Yojson.Safe.t) =
  *   in
  *   let data = Yojson.Safe.to_string json in
  *   print_debug (Printf.sprintf "Rpc.call: raw request =\n%s\n" data);%lwt
- *   let req = new Http_client.post_raw uri data in
+ *   let req = new Http_client.post_raw url data in
  *   req#set_req_header "Content-type" "application/json";
  *   let pipeline = new Http_client.pipeline in
  *   let errormsg = ref None in
@@ -120,9 +119,9 @@ let rpc_call uri method_name (params : Yojson.Safe.t) =
 module Get = Json.GetExn
 
 (* module Net = struct
- *   let version ~uri = rpc_call uri "net_version" `Null
- *   let listening ~uri = rpc_call uri "net_listening" `Null
- *   let peer_count ~uri = rpc_call uri "net_peerCount" `Null
+ *   let version ~url = rpc_call url "net_version" `Null
+ *   let listening ~url = rpc_call url "net_listening" `Null
+ *   let peer_count ~url = rpc_call url "net_peerCount" `Null
  * end *)
 
 let ( |>> ) promise pure = Lwt.bind promise (fun x -> Lwt.return (pure x))
@@ -139,90 +138,88 @@ module Eth = struct
     | `earliest -> `String "earliest"
     | `pending -> `String "pending"
 
-  let protocol_version ~uri =
-    rpc_call uri "eth_protocolVersion" `Null |>> Get.int_as_string
+  let protocol_version url =
+    rpc_call url "eth_protocolVersion" `Null |>> Get.int_as_string
 
-  let syncing ~uri = rpc_call uri "eth_syncing" `Null |>> Get.bool
+  let syncing url = rpc_call url "eth_syncing" `Null |>> Get.bool
 
-  let coinbase ~uri =
-    rpc_call uri "eth_coinbase" `Null |>> Address.of_0x % Get.string
+  let coinbase url =
+    rpc_call url "eth_coinbase" `Null |>> Address.of_0x % Get.string
 
-  let mining ~uri = rpc_call uri "eth_mining" `Null |>> Get.bool
-  let hashrate ~uri = rpc_call uri "eth_hashrate" `Null |>> Get.bigint_as_string
+  let mining url = rpc_call url "eth_mining" `Null |>> Get.bool
+  let hashrate url = rpc_call url "eth_hashrate" `Null |>> Get.bigint_as_string
+  let gas_price url = rpc_call url "eth_gasPrice" `Null |>> Get.bigint_as_string
 
-  let gas_price ~uri =
-    rpc_call uri "eth_gasPrice" `Null |>> Get.bigint_as_string
-
-  let accounts ~uri =
-    rpc_call uri "eth_accounts" `Null
+  let accounts url =
+    rpc_call url "eth_accounts" `Null
     |>> Get.string_list |>> List.map Address.of_0x
 
-  let block_number ~uri =
-    rpc_call uri "eth_blockNumber" `Null |>> Get.int_as_string
+  let block_number url =
+    rpc_call url "eth_blockNumber" `Null |>> Get.int_as_string
 
-  let get_balance ~uri ~address ~(at_time : time) =
+  let get_balance url ~address ~(at_time : time) =
     let time = time_to_json at_time in
     let params = `List [`String (Address.show address); time] in
-    rpc_call uri "eth_getBalance" params |>> Get.bigint_as_string
+    rpc_call url "eth_getBalance" params |>> Get.bigint_as_string
 
-  let get_storage_at ~uri ~address ~position ~(at_time : time) =
+  let get_storage_at url ~address ~position ~(at_time : time) =
     let time = time_to_json at_time in
     let params =
       `List
         [`String (Address.show address); `String (Z.to_string position); time]
     in
-    rpc_call uri "eth_getStorageAt" params |>> Get.string
+    rpc_call url "eth_getStorageAt" params |>> Get.string
 
-  let get_transaction_count ~uri ~address ~(at_time : time) =
+  let get_transaction_count url ~address ~(at_time : time) =
     let time = time_to_json at_time in
     let params = `List [`String (Address.show address); time] in
-    rpc_call uri "eth_getTransactionCount" params |>> Get.int
+    rpc_call url "eth_getTransactionCount" params |>> Get.int
 
-  let get_transaction_count_by_hash ~uri ~block_hash =
+  let get_transaction_count_by_hash url ~block_hash =
     let args = `List [`String (Hash256.show block_hash)] in
-    rpc_call uri "eth_getTransactionCountByHash" args |>> Get.int
+    rpc_call url "eth_getTransactionCountByHash" args |>> Get.int
 
-  let get_transaction_count_by_number ~uri ~(at_time : time) =
+  let get_transaction_count_by_number url ~(at_time : time) =
     let args = `List [time_to_json at_time] in
-    rpc_call uri "eth_getTransactionCountByNumber" args |>> Get.int
+    rpc_call url "eth_getTransactionCountByNumber" args |>> Get.int
 
   (* eth_getUncleCountByBlockHash, eth_getUncleCountByBlockNumber *)
 
-  let get_code ~uri ~address ~(at_time : time) =
+  let get_code url ~address ~(at_time : time) =
     let params = `List [`String (Address.show address); time_to_json at_time] in
-    rpc_call uri "eth_getCode" params |>> Get.string
+    rpc_call url "eth_getCode" params |>> Get.string
 
   (* TODO: it would be nice to parse it back to bytecode *)
 
-  let get_block_by_hash ~uri ~block_hash =
+  let get_block_by_hash url ~block_hash =
     let params = `List [`String (Hash256.show block_hash)] in
-    rpc_call uri "eth_getBlockByHash" params |>> Get.result |>> assert false
+    rpc_call url "eth_getBlockByHash" params |>> Get.result |>> assert false
 
-  let get_block_by_number ~uri ~at_time =
+  let get_block_by_number url ~at_time =
     let params = `List [time_to_json at_time; `Bool true] in
-    rpc_call uri "eth_getBlockByNumber" params |>> Get.result |>> assert false
+    rpc_call url "eth_getBlockByNumber" params |>> Get.result |>> assert false
 
-  let sign ~uri ~address ~message =
-    rpc_call uri "eth_sign"
+  let sign url ~address ~message =
+    rpc_call url "eth_sign"
       (`List [`String (Address.show address); `String message])
     |>> Get.string
 
-  let send_transaction ~uri ~transaction =
+  let send_transaction url ~transaction =
     let args = `List [Tx.to_json transaction] in
-    rpc_call uri "eth_sendTransaction" args |>> Get.string |>> Hash256.of_0x
+    rpc_call url "eth_sendTransaction" args |>> Get.string |>> Hash256.of_0x
 
-  let send_raw_transaction ~uri ~data =
+  let send_raw_transaction url ~data =
     let args = `List [`String data] in
-    rpc_call uri "eth_sendRawTransaction" args |>> Get.string |>> Hash256.of_0x
+    rpc_call url "eth_sendRawTransaction" args |>> Get.string |>> Hash256.of_0x
 
-  let call ~uri ~transaction ~(at_time : time) =
-    rpc_call uri "eth_call"
+  let call url ~transaction ~(at_time : time) =
+    rpc_call url "eth_call"
       (`List [Tx.to_json transaction; time_to_json at_time])
     |>> Get.string
 
-  let estimate_gas ~uri ~transaction =
+  let estimate_gas url ~transaction =
     try%lwt
-      rpc_call uri "eth_estimateGas" (`List [Tx.to_json transaction])
+      rpc_call url "eth_estimateGas" (`List [Tx.to_json transaction])
       |>> Get.bigint_as_string
     with exn ->
       let msg = "estimate_gas: error" in
@@ -230,15 +227,15 @@ module Eth = struct
 
   (* getBlockByHash/byNumber, etc *)
   (* getTransactionReceipt *)
-  let get_transaction_receipt ~uri ~transaction_hash =
-    rpc_call uri "eth_getTransactionReceipt"
+  let get_transaction_receipt url ~transaction_hash =
+    rpc_call url "eth_getTransactionReceipt"
       (`List [`String (Hash256.show transaction_hash)])
     |>> Get.result |>> Tx.receipt_from_json
 
-  let send_transaction_and_get_receipt ~uri ~transaction =
-    let%lwt hash = send_transaction ~uri ~transaction in
+  let send_transaction_and_get_receipt url ~transaction =
+    let%lwt hash = send_transaction url ~transaction in
     let rec loop () =
-      match%lwt get_transaction_receipt ~uri ~transaction_hash:hash with
+      match%lwt get_transaction_receipt url ~transaction_hash:hash with
       | None ->
           Lwt_log.debug "send_transaction_and_get_receipt: waiting ..." ;%lwt
           Lwt_unix.sleep 1.0 ;%lwt
@@ -250,7 +247,7 @@ module Eth = struct
           Lwt.fail exn in
     loop ()
 
-  (* let send_contract_and_get_receipt_auto ~uri ~src ~data ?value () =
+  (* let send_contract_and_get_receipt_auto url ~src ~data ?value () =
    *   let open Tx in
    *   let tx =
    *     {
@@ -263,11 +260,11 @@ module Eth = struct
    *       nonce = None
    *     }
    *   in
-   *   let gas = estimate_gas ~uri ~transaction:tx in
+   *   let gas = estimate_gas url ~transaction:tx in
    *   let tx  = { tx with gas = Some gas } in
-   *   send_transaction_and_get_receipt ~uri ~transaction:tx *)
+   *   send_transaction_and_get_receipt url ~transaction:tx *)
 
-  let send_contract_and_get_receipt ~uri ~src ~data ?gas ?value () =
+  let send_contract_and_get_receipt url ~src ~data ?gas ?value () =
     let open Tx in
     let tx =
       {src; dst= None; gas= None; gas_price= None; value; data; nonce= None}
@@ -275,19 +272,19 @@ module Eth = struct
     let%lwt tx =
       match gas with
       | None ->
-          let%lwt gas = estimate_gas ~uri ~transaction:tx in
+          let%lwt gas = estimate_gas url ~transaction:tx in
           Lwt.return {tx with gas= Some gas}
       | Some _ -> Lwt.return {tx with gas} in
-    send_transaction_and_get_receipt ~uri ~transaction:tx
+    send_transaction_and_get_receipt url ~transaction:tx
 end
 
 (* module EthLwt =
  * struct
  *
- *   let send_transaction_and_get_receipt ~uri ~transaction =
- *     let%lwt hash = Eth.send_transaction ~uri ~transaction in
+ *   let send_transaction_and_get_receipt url ~transaction =
+ *     let%lwt hash = Eth.send_transaction url ~transaction in
  *     let rec loop () =
- *       match%lwt Eth.get_transaction_receipt ~uri ~transaction_hash:hash with
+ *       match%lwt Eth.get_transaction_receipt url ~transaction_hash:hash with
  *       | None ->
  *         Lwt_unix.sleep 2.0;%lwt
  *         loop ()
@@ -299,7 +296,7 @@ end
  *     in
  *     loop ()
  *
- *   (\* let send_contract_and_get_receipt_auto ~uri ~src ~data ?value () =
+ *   (\* let send_contract_and_get_receipt_auto url ~src ~data ?value () =
  *    *   let open Tx in
  *    *   let tx =
  *    *     {
@@ -312,11 +309,11 @@ end
  *    *       nonce = None
  *    *     }
  *    *   in
- *    *   let gas = Eth.estimate_gas ~uri ~transaction:tx in
+ *    *   let gas = Eth.estimate_gas url ~transaction:tx in
  *    *   let tx  = { tx with gas = Some gas } in
- *    *   send_transaction_and_get_receipt ~uri ~transaction:tx *\)
+ *    *   send_transaction_and_get_receipt url ~transaction:tx *\)
  *
- *   let send_contract_and_get_receipt ~uri ~src ~data ?gas ?value () =
+ *   let send_contract_and_get_receipt url ~src ~data ?gas ?value () =
  *     let open Tx in
  *     let tx =
  *       {
@@ -332,17 +329,17 @@ end
  *     let tx =
  *       match gas with
  *       | None ->
- *         let%lwt gas = Eth.estimate_gas ~uri ~transaction:tx in
+ *         let%lwt gas = Eth.estimate_gas url ~transaction:tx in
  *         Lwt.return { tx with gas = Some gas }
  *       | Some _ ->
  *         Lwt.return { tx with gas }
  *     in
- *     send_transaction_and_get_receipt ~uri ~transaction:tx
+ *     send_transaction_and_get_receipt url ~transaction:tx
  *
  * end *)
 
 module Personal = struct
-  let send_transaction ~uri ~src ~dst ~value ~src_pwd =
+  let send_transaction url ~src ~dst ~value ~src_pwd =
     (* let value = Bitstr.(hex_to_string (hex_of_bigint value)) in *)
     let args =
       `List
@@ -350,54 +347,54 @@ module Personal = struct
             [ ("from", `String (Address.show src));
               ("to", `String (Address.show dst)); ("value", Json.zhex value) ];
           `String src_pwd ] in
-    rpc_call uri "personal_sendTransaction" args
+    rpc_call url "personal_sendTransaction" args
     |>> Get.string |>> Hash256.of_0x
 
-  let new_account ~uri ~passphrase =
+  let new_account url ~passphrase =
     let args = `List [`String passphrase] in
-    rpc_call uri "personal_newAccount" args |>> Get.string |>> Address.of_0x
+    rpc_call url "personal_newAccount" args |>> Get.string |>> Address.of_0x
 
-  let unlock_account ~uri ~account ~passphrase ~unlock_duration =
+  let unlock_account url ~account ~passphrase ~unlock_duration =
     let args =
       `List
         [ `String (Address.show account); `String passphrase;
           `Int unlock_duration ] in
-    rpc_call uri "personal_unlockAccount" args |>> Get.bool
+    rpc_call url "personal_unlockAccount" args |>> Get.bool
 end
 
 module Miner = struct
-  let set_gas_price ~uri ~gas_price =
-    rpc_call uri "miner_setGasPrice" (`List [Json.zhex gas_price]) |>> Get.bool
+  let set_gas_price url ~gas_price =
+    rpc_call url "miner_setGasPrice" (`List [Json.zhex gas_price]) |>> Get.bool
 
-  let start ~uri ~thread_count =
+  let start url ~thread_count =
     let args = `Int thread_count in
-    rpc_call uri "miner_start" (`List [args]) |>> Get.null
+    rpc_call url "miner_start" (`List [args]) |>> Get.null
 
-  let stop ~uri = rpc_call uri "miner_stop" `Null |>> ignore
+  let stop url = rpc_call url "miner_stop" `Null |>> ignore
 
-  let set_ether_base ~uri ~address =
+  let set_ether_base url ~address =
     let args = `List [`String (Address.show address)] in
-    rpc_call uri "miner_setEtherbase" args |>> Get.bool
+    rpc_call url "miner_setEtherbase" args |>> Get.bool
 end
 
 module Admin = struct
-  let add_peer ~uri ~peer_url =
-    rpc_call uri "admin_addPeer" (`List [`String peer_url]) |>> Get.bool
+  let add_peer url ~peer_url =
+    rpc_call url "admin_addPeer" (`List [`String peer_url]) |>> Get.bool
 
-  let datadir ~uri = rpc_call uri "admin_datadir" `Null |>> Get.string
+  let datadir url = rpc_call url "admin_datadir" `Null |>> Get.string
 
-  let node_info ~uri =
-    rpc_call uri "admin_nodeInfo" `Null
+  let node_info url =
+    rpc_call url "admin_nodeInfo" `Null
     |>> Get.result |>> Types.node_info_from_json
 
-  let peers ~uri =
-    rpc_call uri "admin_peers" `Null
+  let peers url =
+    rpc_call url "admin_peers" `Null
     |>> Get.result |>> Types.peer_info_from_json
 end
 
 module Debug = struct
-  let dump_block ~uri ~block_number =
+  let dump_block url ~block_number =
     let bnum = Printf.sprintf "0x%x" block_number in
-    rpc_call uri "debug_dumpBlock" (`List [`String bnum])
+    rpc_call url "debug_dumpBlock" (`List [`String bnum])
     |>> Get.result |>> Types.block_from_json
 end

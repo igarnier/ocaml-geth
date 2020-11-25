@@ -55,8 +55,8 @@ let to_json ~filename =
       (Json_encoding.print_error ?print_unknown:None)
       exn
 
-let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract ~arguments
-    ?gas ?value () =
+let deploy_rpc ~url ~(account : Types.Address.t) ~contract ~arguments ?gas
+    ?value () =
   let prepare_constructor ({funcs; bin; _} : contract) =
     let constr = List.find_opt ABI.Fun.is_constructor funcs |> Option.get in
     let encoded =
@@ -84,13 +84,12 @@ let deploy_rpc ~(uri : string) ~(account : Types.Address.t) ~contract ~arguments
       | "" -> loop tl
       | _ ->
           let data = prepare_constructor k in
-          Rpc_lwt.Eth.send_contract_and_get_receipt ~uri ~src:account ~data ?gas
+          Rpc_lwt.Eth.send_contract_and_get_receipt url ~src:account ~data ?gas
             ?value () ) in
   loop contract.contracts
 
-let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
-    ~(arguments : SolidityValue.t list) ~(src : Types.Address.t)
-    ~(ctx : Types.Address.t) ?gas ?value () =
+let call_method_tx ~url ~(abi : ABI.Fun.t) ~(arguments : SolidityValue.t list)
+    ~(src : Types.Address.t) ~(ctx : Types.Address.t) ?gas ?value () =
   let mname = abi.name in
   let inputs = abi.inputs in
   let siglen = Array.length inputs in
@@ -122,7 +121,7 @@ let call_method_tx ~(uri : string) ~(abi : ABI.Fun.t)
     | Some _ -> Lwt.return {raw_transaction with gas}
     | None ->
         let%lwt gas =
-          Rpc_lwt.Eth.estimate_gas ~uri ~transaction:raw_transaction in
+          Rpc_lwt.Eth.estimate_gas url ~transaction:raw_transaction in
         Lwt.return {raw_transaction with gas= Some gas}
 
 let call_void_method_tx ~mname ~(src : Types.Address.t) ~(ctx : Types.Address.t)
@@ -139,14 +138,12 @@ let call_void_method_tx ~mname ~(src : Types.Address.t) ~(ctx : Types.Address.t)
       nonce= None } in
   Lwt.return tx
 
-let execute_method ~(uri : string) ~(abi : ABI.Fun.t)
-    ~(arguments : SolidityValue.t list) ~(src : Types.Address.t)
-    ~(ctx : Types.Address.t) ?gas ?value () =
-  let%lwt tx = call_method_tx ~uri ~abi ~arguments ~src ~ctx ?gas ?value () in
-  Rpc_lwt.Eth.send_transaction_and_get_receipt ~uri ~transaction:tx
+let execute_method ~url ~(abi : ABI.Fun.t) ~(arguments : SolidityValue.t list)
+    ~(src : Types.Address.t) ~(ctx : Types.Address.t) ?gas ?value () =
+  let%lwt tx = call_method_tx ~url ~abi ~arguments ~src ~ctx ?gas ?value () in
+  Rpc_lwt.Eth.send_transaction_and_get_receipt url ~transaction:tx
 
-let call_method ~(uri : string) ~(abi : ABI.Fun.t)
-    ~(arguments : SolidityValue.t list) ~(src : Types.Address.t)
-    ~(ctx : Types.Address.t) ?gas ?value () =
-  let%lwt tx = call_method_tx ~uri ~abi ~arguments ~src ~ctx ?gas ?value () in
-  Rpc_lwt.Eth.call ~uri ~transaction:tx ~at_time:`latest
+let call_method ~url ~abi ~(arguments : SolidityValue.t list)
+    ~(src : Types.Address.t) ~(ctx : Types.Address.t) ?gas ?value () =
+  let%lwt tx = call_method_tx ~url ~abi ~arguments ~src ~ctx ?gas ?value () in
+  Rpc_lwt.Eth.call url ~transaction:tx ~at_time:`latest

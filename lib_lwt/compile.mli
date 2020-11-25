@@ -4,7 +4,7 @@ open Contract
 val to_json : filename:string -> t
 
 val deploy_rpc :
-  uri:string ->
+  url:Uri.t ->
   account:Types.Address.t ->
   contract:t ->
   arguments:SolidityValue.t list ->
@@ -14,7 +14,7 @@ val deploy_rpc :
   Types.Tx.receipt Lwt.t
 
 val call_method_tx :
-  uri:string ->
+  url:Uri.t ->
   abi:ABI.Fun.t ->
   arguments:SolidityValue.t list ->
   src:Types.Address.t ->
@@ -33,7 +33,7 @@ val call_void_method_tx :
   Types.Tx.t Lwt.t
 
 val execute_method :
-  uri:string ->
+  url:Uri.t ->
   abi:ABI.Fun.t ->
   arguments:SolidityValue.t list ->
   src:Types.Address.t ->
@@ -44,7 +44,7 @@ val execute_method :
   Types.Tx.receipt Lwt.t
 
 val call_method :
-  uri:string ->
+  url:Uri.t ->
   abi:ABI.Fun.t ->
   arguments:SolidityValue.t list ->
   src:Types.Address.t ->
